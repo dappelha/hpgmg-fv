@@ -15,6 +15,10 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
   uint64_t _timeStart = CycleTime();
   int block;
 
+  if (level->use_cuda) {
+    cuda_residual(*level, res_id, x_id, rhs_id, a, b);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -45,6 +49,7 @@ void residual(level_type * level, int res_id, int x_id, int rhs_id, double a, do
       double Ax = apply_op_ijk(x);
       res[ijk] = rhs[ijk]-Ax;
     }}}
+  }
   }
   level->cycles.residual += (uint64_t)(CycleTime()-_timeStart);
 }

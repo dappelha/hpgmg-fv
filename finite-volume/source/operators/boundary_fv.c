@@ -30,6 +30,10 @@ void apply_BCs_v1(level_type * level, int x_id, int shape){
 
   int buffer;
   uint64_t _timeStart = CycleTime();
+  if(level->use_cuda) {
+    cuda_apply_BCs_v1(*level,x_id,shape);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     double scale = 1.0;
@@ -84,7 +88,7 @@ void apply_BCs_v1(level_type * level, int x_id, int shape){
         x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
       }}}
     }
-
+  }
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }
@@ -111,6 +115,10 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
 
   int buffer;
   uint64_t _timeStart = CycleTime();
+  if(level->use_cuda) {
+    cuda_apply_BCs_v2(*level,x_id,shape);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     int i,j,k;
@@ -245,6 +253,7 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
                  - 0.625*x[ijk+2*di+  dj+2*dk] 
                  + 0.125*x[ijk+2*di+2*dj+2*dk];
     }
+  }
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }

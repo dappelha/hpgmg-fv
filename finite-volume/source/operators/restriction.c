@@ -135,9 +135,15 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // pack MPI send buffers...
   if(level_f->restriction[restrictionType].num_blocks[0]>0){
     _timeStart = CycleTime();
+    if(level_f->use_cuda) {
+      cuda_restriction(*level_c,id_c,*level_f,id_f,level_f->restriction[restrictionType],restrictionType,0);
+      cudaDeviceSynchronize();
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[0])
     for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[0];buffer++){
       restriction_pc_block(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[0][buffer],restrictionType);
+    }
     }
     _timeEnd = CycleTime();
     level_f->cycles.restriction_pack += (_timeEnd-_timeStart);
@@ -169,9 +175,14 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // perform local restriction[restrictionType]... try and hide within Isend latency... 
   if(level_f->restriction[restrictionType].num_blocks[1]>0){
     _timeStart = CycleTime();
+    if (level_f->use_cuda) {
+      cuda_restriction(*level_c, id_c, *level_f, id_f, level_f->restriction[restrictionType], restrictionType, 1);
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[1])
     for(buffer=0;buffer<level_f->restriction[restrictionType].num_blocks[1];buffer++){
       restriction_pc_block(level_c,id_c,level_f,id_f,&level_f->restriction[restrictionType].blocks[1][buffer],restrictionType);
+    }
     }
     _timeEnd = CycleTime();
     level_f->cycles.restriction_local += (_timeEnd-_timeStart);
@@ -191,9 +202,14 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // unpack MPI receive buffers 
   if(level_c->restriction[restrictionType].num_blocks[2]>0){
     _timeStart = CycleTime();
+    if(level_c->use_cuda) {
+      cuda_copy_block(*level_c,id_c,level_c->restriction[restrictionType],2);
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->restriction[restrictionType].num_blocks[2])
     for(buffer=0;buffer<level_c->restriction[restrictionType].num_blocks[2];buffer++){
       CopyBlock(level_c,id_c,&level_c->restriction[restrictionType].blocks[2][buffer]);
+    }
     }
     _timeEnd = CycleTime();
     level_f->cycles.restriction_unpack += (_timeEnd-_timeStart);

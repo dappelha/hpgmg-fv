@@ -3,6 +3,10 @@
 // SWWilliams@lbl.gov
 // Lawrence Berkeley National Lab
 //------------------------------------------------------------------------------------------------------------------------------
+// Nikolay Sakharnykh
+// nsakharnykh@nvidia.com
+// Copyright (c) 2014-2015, NVIDIA CORPORATION.  All rights reserved.
+//------------------------------------------------------------------------------------------------------------------------------
 #ifndef LEVEL_H
 #define LEVEL_H
 //------------------------------------------------------------------------------------------------------------------------------
@@ -11,6 +15,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <cuda_runtime.h>
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef USE_MPI
 #include <mpi.h>
@@ -30,7 +35,7 @@
 #ifndef BLOCKCOPY_TILE_I
 #define BLOCKCOPY_TILE_I 10000
 #else
-#warning By overriding BLOCKCOPY_TILE_I, you are tiling in the unit stride.  I hope you know what you are doing.
+//#warning By overriding BLOCKCOPY_TILE_I, you are tiling in the unit stride.  I hope you know what you are doing.
 #endif
 #ifndef BLOCKCOPY_TILE_J
 #define BLOCKCOPY_TILE_J 8
@@ -41,7 +46,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 // FP data for a vector within a box is padded to ensure alignment
 #ifndef BOX_ALIGN_JSTRIDE
-#define BOX_ALIGN_JSTRIDE   2  // j-stride(unit stride dimension including ghosts and padding) is a multiple of BOX_ALIGN_JSTRIDE... useful for SIMD in j+/-1
+#define BOX_ALIGN_JSTRIDE   32  // j-stride(unit stride dimension including ghosts and padding) is a multiple of BOX_ALIGN_JSTRIDE... useful for SIMD in j+/-1
 #endif
 #ifndef BOX_ALIGN_KSTRIDE
 #define BOX_ALIGN_KSTRIDE   8  // k-stride is a multiple of BOX_ALIGN_KSTRIDE ... useful for SIMD in k+/-1
@@ -138,6 +143,11 @@ typedef struct {
 
   int num_threads;
 
+  // GPU-related info
+  int use_cuda;					// run operators on this level on GPU
+  int um_access_policy;				// access hints for GPU memory allocator
+  double *chebyshev_c1, *chebyshev_c2;		// chebyshev coefficients in heap memory
+
   // statistics information...
   struct {
     uint64_t              smooth;
@@ -181,7 +191,7 @@ typedef struct {
 
 
 //------------------------------------------------------------------------------------------------------------------------------
-void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int numVectors, int domain_boundary_condition, int my_rank, int num_ranks);
+void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts, int numVectors, int domain_boundary_condition, int my_rank, int num_ranks, level_type *parent_level);
 void destroy_level(level_type *level);
 void create_vectors(level_type *level, int numVectors);
 void reset_level_timers(level_type *level);
@@ -192,7 +202,16 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
                           int  read_box, double*  read_ptr, int  read_i, int  read_j, int  read_k, int  read_jStride, int  read_kStride, int  read_scale,
                           int write_box, double* write_ptr, int write_i, int write_j, int write_k, int write_jStride, int write_kStride, int write_scale,
                           int my_blockcopy_tile_i, int my_blockcopy_tile_j, int my_blockcopy_tile_k,
-                          int subtype
+                          int subtype, int um_access_policy
                          );
+//------------------------------------------------------------------------------------------------------------------------------
+// access policies for UM
+#define UM_ACCESS_CPU  0
+#define UM_ACCESS_GPU  1
+#define UM_ACCESS_BOTH 2
+// custom memory management routines
+void* um_malloc(size_t size, int access_policy);
+void* um_realloc(void *ptr, size_t size, int access_policy);
+void  um_free(void *ptr);
 //------------------------------------------------------------------------------------------------------------------------------
 #endif

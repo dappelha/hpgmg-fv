@@ -17,6 +17,10 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   int s;
   int block;
 
+  int compute_c1_c2 = 0;
+  // allocate heap memory for coefficients
+  if (level->chebyshev_c1 == NULL) { level->chebyshev_c1 = (double*)um_malloc(CHEBYSHEV_DEGREE * sizeof(double), level->um_access_policy); compute_c1_c2 = 1; }
+  if (level->chebyshev_c2 == NULL) { level->chebyshev_c2 = (double*)um_malloc(CHEBYSHEV_DEGREE * sizeof(double), level->um_access_policy); compute_c1_c2 = 1; }
 
   // compute the Chebyshev coefficients...
   double beta     = 1.000*level->dominant_eigenvalue_of_DinvA;
@@ -28,15 +32,26 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
   double delta    = 0.5*(beta-alpha);		// major axis?
   double sigma = theta/delta;
   double rho_n = 1/sigma;			// rho_0
+#ifdef CUDA_UM_ALLOC
+  double *chebyshev_c1 = level->chebyshev_c1;	// + c1*(x_n-x_nm1) == rho_n*rho_nm1
+  double *chebyshev_c2 = level->chebyshev_c2;	// + c2*(b-Ax_n)
+#else
   double chebyshev_c1[CHEBYSHEV_DEGREE];	// + c1*(x_n-x_nm1) == rho_n*rho_nm1
   double chebyshev_c2[CHEBYSHEV_DEGREE];	// + c2*(b-Ax_n)
-  chebyshev_c1[0] = 0.0;
-  chebyshev_c2[0] = 1/theta;
-  for(s=1;s<CHEBYSHEV_DEGREE;s++){
-    double rho_nm1 = rho_n;
-    rho_n = 1.0/(2.0*sigma - rho_nm1);
-    chebyshev_c1[s] = rho_n*rho_nm1;
-    chebyshev_c2[s] = rho_n*2.0/delta;
+#endif
+  // compute coefficients only once if using gpu for this level
+  if (!level->use_cuda || compute_c1_c2) {
+    // make sure gpu is not running any tasks
+    cudaDeviceSynchronize();  			// TODO: this sync can be removed with support of concurrent CPU/GPU memory access
+    // now compute coefficients on cpu
+    chebyshev_c1[0] = 0.0;
+    chebyshev_c2[0] = 1/theta;
+    for(s=1;s<CHEBYSHEV_DEGREE;s++){
+      double rho_nm1 = rho_n;
+      rho_n = 1.0/(2.0*sigma - rho_nm1);
+      chebyshev_c1[s] = rho_n*rho_nm1;
+      chebyshev_c2[s] = rho_n*2.0/delta;
+    }
   }
 
 
@@ -48,6 +63,10 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
     // apply the smoother... Chebyshev ping pongs between x_id and VECTOR_TEMP
     uint64_t _timeStart = CycleTime();
 
+    if (level->use_cuda) {
+      cuda_cheby_smooth(*level, x_id, rhs_id, a, b, s, level->chebyshev_c1, level->chebyshev_c2);
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
     for(block=0;block<level->num_my_blocks;block++){
       const int box = level->my_blocks[block].read.box;
@@ -95,6 +114,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       }}}
 
     } // box-loop
+    } // use-cuda
     level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
   } // s-loop
 }

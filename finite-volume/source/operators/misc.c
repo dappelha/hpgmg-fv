@@ -8,6 +8,11 @@ void zero_vector(level_type * level, int id_a){
   uint64_t _timeStart = CycleTime();
   int block;
 
+  if (level->use_cuda) {
+    cuda_zero_vector(*level, id_a);
+  }
+  else {
+  cudaDeviceSynchronize();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -39,6 +44,7 @@ void zero_vector(level_type * level, int id_a){
       int ijk = i + j*jStride + k*kStride;
       grid[ijk] = 0.0;
     }}}
+  }
   }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 }
@@ -145,6 +151,11 @@ void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double 
 
   int block;
 
+  if (level->use_cuda) {
+    cuda_add_vectors(*level, id_c, scale_a, id_a, scale_b, id_b);
+  }
+  else {
+  cudaDeviceSynchronize();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -169,6 +180,7 @@ void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double 
         grid_c[ijk] = scale_a*grid_a[ijk] + scale_b*grid_b[ijk];
     }}}
   }
+  }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 }
 
@@ -182,6 +194,10 @@ void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b)
 
   int block;
 
+  if (level->use_cuda) {
+    cuda_mul_vectors(*level, id_c, scale, id_a, id_b);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -205,6 +221,7 @@ void mul_vectors(level_type * level, int id_c, double scale, int id_a, int id_b)
         int ijk = i + j*jStride + k*kStride;
         grid_c[ijk] = scale*grid_a[ijk]*grid_b[ijk];
     }}}
+  }
   }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 }
@@ -255,6 +272,10 @@ void scale_vector(level_type * level, int id_c, double scale_a, int id_a){
 
   int block;
 
+  if (level->use_cuda) {
+    cuda_scale_vector(*level, id_c, scale_a, id_a);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -277,6 +298,7 @@ void scale_vector(level_type * level, int id_c, double scale_a, int id_a){
         int ijk = i + j*jStride + k*kStride;
         grid_c[ijk] = scale_a*grid_a[ijk];
     }}}
+  }
   }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 }
@@ -339,6 +361,10 @@ double norm(level_type * level, int id_a){ // implements the max norm
   int block;
   double max_norm =  0.0;
 
+  if (level->use_cuda) {
+    max_norm = cuda_max_abs(*level, id_a);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS_MAX(level,block,level->num_my_blocks,max_norm)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -365,6 +391,7 @@ double norm(level_type * level, int id_a){ // implements the max norm
 
     if(block_norm>max_norm){max_norm = block_norm;}
   } // block list
+  } // use cuda
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 
   #ifdef USE_MPI
@@ -389,6 +416,10 @@ double mean(level_type * level, int id_a){
   int block;
   double sum_level =  0.0;
 
+  if (level->use_cuda) {
+    sum_level = cuda_sum(*level, id_a);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,block,level->num_my_blocks,sum_level)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -413,6 +444,7 @@ double mean(level_type * level, int id_a){
     }}}
     sum_level+=sum_block;
   }
+  }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
   double ncells_level = (double)level->dim.i*(double)level->dim.j*(double)level->dim.k;
 
@@ -436,6 +468,10 @@ void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
   uint64_t _timeStart = CycleTime();
   int block;
 
+  if (level->use_cuda) {
+    cuda_shift_vector(*level, id_c, id_a, shift_a);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -459,6 +495,7 @@ void shift_vector(level_type * level, int id_c, int id_a, double shift_a){
       int ijk = i + j*jStride + k*kStride;
       grid_c[ijk] = grid_a[ijk] + shift_a;
     }}}
+  }
   }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 }

@@ -30,6 +30,10 @@ void apply_BCs_p1(level_type * level, int x_id, int shape){
 
   int buffer;
   uint64_t _timeStart = CycleTime();
+  if (level->use_cuda) {
+    cuda_apply_BCs_v1(*level, x_id, shape);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     double scale = 1.0;
@@ -85,6 +89,7 @@ void apply_BCs_p1(level_type * level, int x_id, int shape){
       }}}
     }
 
+  }
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }

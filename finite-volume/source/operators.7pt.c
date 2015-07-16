@@ -17,6 +17,7 @@
 #include "defines.h"
 #include "level.h"
 #include "operators.h"
+#include "cuda/common.h"
 //------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_VARIABLE_COEFFICIENT
 //------------------------------------------------------------------------------------------------------------------------------
@@ -218,6 +219,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   exchange_boundary(level,VECTOR_BETA_J,STENCIL_SHAPE_BOX);
   exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);
 
+  // make sure that boundary data is updated on gpu
+  cudaDeviceSynchronize();
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // calculate Dinv, L1inv, and estimate the dominant Eigenvalue
@@ -326,6 +329,8 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
   exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  // make sure that boundary data is updated on gpu
+  cudaDeviceSynchronize();
 }
 
 

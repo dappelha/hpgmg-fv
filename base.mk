@@ -14,6 +14,8 @@ INCDIR ?= include
 thisdir = $(addprefix $(dir $(lastword $(MAKEFILE_LIST))),$(1))
 incsubdirs = $(addsuffix /local.mk,$(call thisdir,$(1)))
 srctoobj = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(filter-out $(OBJDIR)/%,$(1)))
+cusrctoobj = $(patsubst $(SRCDIR)/%.cu,$(OBJDIR)/%.cu.o,$(filter-out $(OBJDIR)/%,$(1)))
+cuobjtodlink = $(patsubst %.cu.o,%.cu.o.dlink,$(1))
 
 hpgmg-fe-y.c :=
 hpgmg-fv-y.c :=
@@ -46,10 +48,28 @@ C_DEPFLAGS ?= $(if $(CONFIG_XLCOMPILER),-qmakedep=gcc,-MMD -MP)
 # on systems that use different syntax to specify C99.
 C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if $(CONFIG_XLCOMPILER),-qlanglvl=extc99,-std=c99))
 
-HPGMG_COMPILE.c = $(call quiet,CC) -c $(C99FLAGS) $(HPGMG_CPPFLAGS) $(CPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
-HPGMG_LINK = $(call quiet,CCLD) $(HPGMG_CFLAGS) $(CFLAGS) $(HPGMG_LDFLAGS) $(LDFLAGS) -o $@
+# find MPI and CUDA dirs
+ifdef CRAY_MPICH2_DIR
+  MPI_DIR = $(CRAY_MPICH2_DIR)
+else
+  MPI_DIR = $(dir $(HPGMG_CC))..
+endif
+CUDA_DIR = $(dir $(HPGMG_NVCC))..
+
+# C compiler/linker options
 CC = $(HPGMG_CC)
 CCLD = $(if $(PCC_LINKER),$(PCC_LINKER),$(HPGMG_CC))
+CFLAGS += -I$(CUDA_DIR)/include
+HPGMG_COMPILE.c = $(call quiet,CC) -c $(C99FLAGS) $(HPGMG_CPPFLAGS) $(CPPFLAGS) $(HPGMG_CFLAGS) $(CFLAGS) $(C_DEPFLAGS)
+HPGMG_LINK = $(call quiet,CCLD) $(HPGMG_CFLAGS) $(CFLAGS) $(HPGMG_LDFLAGS) $(LDFLAGS) -o $@
+
+# CUDA options
+NVCC = $(HPGMG_NVCC)
+CFLAGS += -I$(MPI_DIR)/include
+LDLIBS += -L$(CUDA_DIR)/lib64 -lcudart -lnvToolsExt -lstdc++
+# note: ignore HPGMG_CFLAGS here and use HPGMG_NVCC_FLAGS instead
+HPGMG_COMPILE.cu = $(call quiet,NVCC) -c $(CPPFLAGS) $(CFLAGS) $(HPGMG_NVCC_FLAGS) $(HPGMG_CUDA_ARCH)
+HPGMG_LINK.cu = $(call quiet,NVCC) -dlink $(HPGMG_LDFLAGS) $(HPGMG_LDLIBS) $(HPGMG_CUDA_ARCH)
 
 hpgmg-fe = $(BINDIR)/hpgmg-fe
 hpgmg-fe : $(hpgmg-fe)
@@ -60,8 +80,12 @@ $(hpgmg-fe) : $(hpgmg-fe-y.o) | $$(@D)/.DIR
 hpgmg-fv = $(BINDIR)/hpgmg-fv
 hpgmg-fv : $(hpgmg-fv)
 hpgmg-fv-y.o := $(call srctoobj,$(hpgmg-fv-y.c))
+hpgmg-fv-y.cu.o := $(call cusrctoobj,$(hpgmg-fv-y.cu))
+hpgmg-fv-y.cu.o.dlink := $(call cuobjtodlink,$(hpgmg-fv-y.cu.o))
 $(hpgmg-fv-y.o) : CPPFLAGS += $(CONFIG_FV_CPPFLAGS)
-$(hpgmg-fv) : $(hpgmg-fv-y.o) | $$(@D)/.DIR
+$(hpgmg-fv-y.cu.o) : CPPFLAGS += $(CONFIG_FV_CPPFLAGS)
+$(hpgmg-fv-y.cu.o.dlink) : CPPFLAGS += $(CONFIG_FV_CPPFLAGS)
+$(hpgmg-fv) : $(hpgmg-fv-y.o) $(hpgmg-fv-y.cu.o) $(hpgmg-fv-y.cu.o.dlink) | $$(@D)/.DIR
 	$(HPGMG_LINK) $^ $(HPGMG_LDLIBS) $(LDLIBS) -lm
 
 $(OBJDIR)/%.o: $(OBJDIR)/%.c
@@ -69,6 +93,12 @@ $(OBJDIR)/%.o: $(OBJDIR)/%.c
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c | $$(@D)/.DIR
 	$(HPGMG_COMPILE.c) $< -o $@
+
+$(OBJDIR)/%.cu.o.dlink: $(OBJDIR)/%.cu.o | $$(@D)/.DIR
+	$(HPGMG_LINK.cu) $< -o $@
+
+$(OBJDIR)/%.cu.o: $(SRCDIR)/%.cu | $$(@D)/.DIR
+	$(HPGMG_COMPILE.cu) $< -o $@
 
 test: test-fe
 prove: prove-fe

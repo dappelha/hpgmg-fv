@@ -17,6 +17,7 @@
 #include "defines.h"
 #include "level.h"
 #include "operators.h"
+#include "cuda/common.h"
 //------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_VARIABLE_COEFFICIENT
 //------------------------------------------------------------------------------------------------------------------------------
@@ -116,12 +117,18 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   exchange_boundary(level,VECTOR_BETA_J,STENCIL_SHAPE_BOX);
   exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);
 
+  // make sure that boundary data is updated on gpu
+  cudaDeviceSynchronize();
+
   // black box rebuild of D^{-1}, l1^{-1}, dominant eigenvalue, ...
   rebuild_operator_blackbox(level,a,b,2);
 
   // exchange Dinv/L1inv/...
   exchange_boundary(level,VECTOR_DINV ,STENCIL_SHAPE_BOX); // safe
   exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
+
+  // make sure that boundary data is updated on gpu
+  cudaDeviceSynchronize();
 }
 
 

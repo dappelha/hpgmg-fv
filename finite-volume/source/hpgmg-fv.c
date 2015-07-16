@@ -45,7 +45,26 @@
 #include "mg.h"
 #include "operators.h"
 #include "solvers.h"
+#include "cuda/common.h"
 //------------------------------------------------------------------------------------------------------------------------------
+void cudaCheckPeerToPeer(){
+  int ndev = 0;
+  int peer = 0;
+  int i,j;
+
+  // query number of GPU devices in the system
+  cudaGetDeviceCount(&ndev);
+  printf("# of devices:  %d\n",ndev);
+
+  // check for peer to peer mappings
+  for(i=0;i<ndev;i++)
+    for(j=i+1;j<ndev;j++)
+    {
+      cudaDeviceCanAccessPeer(&peer,i,j);
+      printf("is peer to peer enabled between devices %d and %d:  %d\n",i,j,peer);
+    }
+}
+
 void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dtol, double rtol){
      int     doTiming;
      int    minSolves = 10; // do at least minSolves MGSolves
@@ -61,6 +80,9 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     double startTime = MPI_Wtime();
     if(doTiming==1){
       if((minTime/timePerSolve)>minSolves)minSolves=(minTime/timePerSolve); // if one needs to do more than minSolves to run for minTime, change minSolves
+      #ifdef MAX_SOLVES
+      if(MAX_SOLVES<minSolves) minSolves=MAX_SOLVES;	// check upper bound for maximum number of solves
+      #endif
     }
     #endif
 
@@ -133,6 +155,8 @@ int main(int argc, char **argv){
   MPI_Init_thread(&argc, &argv, requested_threading_model, &actual_threading_model);
   MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+  // Set CUDA device for this rank...
+  cudaSetDevice(my_rank);
 //if(actual_threading_model>requested_threading_model)actual_threading_model=requested_threading_model;
   if(my_rank==0){
        if(requested_threading_model == MPI_THREAD_MULTIPLE  )fprintf(stdout,"Requested MPI_THREAD_MULTIPLE, ");
@@ -153,6 +177,11 @@ int main(int argc, char **argv){
   #endif
   #endif // USE_MPI
 
+#ifdef CUDA_CHECK_P2P
+  if(my_rank==0)
+    cudaCheckPeerToPeer();
+#endif
+  NVTX_PUSH("main",1)  // start NVTX profiling
 
   int log2_box_dim = 6;
   int target_boxes_per_rank = 1;
@@ -233,7 +262,7 @@ int main(int argc, char **argv){
   level_type level_h;
   mg_type MG_h;
   int ghosts=stencil_get_radius();
-  create_level(&level_h,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,bc,my_rank,num_tasks);
+  create_level(&level_h,boxes_in_i,box_dim,ghosts,VECTORS_RESERVED,bc,my_rank,num_tasks,NULL);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef USE_HELMHOLTZ
   double a=1.0;double b=1.0; // Helmholtz
@@ -278,6 +307,7 @@ int main(int argc, char **argv){
      MGSolve(&MG_h,l,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
     #endif
   }
+  NVTX_POP  // stop NVTX profiling
   richardson_error(&MG_h,0,VECTOR_U);
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   if(my_rank==0){fprintf(stdout,"\n\n===== Deallocating memory ===========================================\n");}

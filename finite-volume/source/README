@@ -1,5 +1,10 @@
 *** Copyright Notice ***
 
+Copyright (c) 2014-2015, NVIDIA CORPORATION. All rights reserved.
+
+The U.S. Department of Energy funded the development of this software
+under subcontract B609478 with Lawrence Livermore National Security (LLNS).
+
 HPGMG, Copyright (c) 2014, The Regents of the University of
 California, through Lawrence Berkeley National Laboratory (subject to
 receipt of any required approvals from the U.S. Dept. of Energy).  All
@@ -56,6 +61,44 @@ an f-cycle that should hit the discretization error in one pass (instead of 10
 v-cycles).  This can provide a substantial performance boost, but presents a 
 number of performance optimization challenges.
 
+Notes on the GPU implementation
+===================
+New options:
+
+-DHOST_LEVEL_SIZE_THRESHOLD	// max number of grid elements in MG level to run on CPU, other levels will be run on GPU
+-DMAX_SOLVES			// controls maximum number of solves after warm-up
+-DCUDA_UM_ALLOC			// use custom Unified Memory allocator instead of malloc (this is required to work properly)
+-DCUDA_UM_ZERO_COPY		// use zero-copy mapped memory for boundary levels to avoid unnecessary migration
+-DCUDA_UM_HOST_ATTACH		// use host attach Unified Memory option for host levels to avoid unnecessary migration
+-DCUDA_STENCIL_OPT_TEX		// enable stencil optimization kernels that use LDG for memory access (only for Chebyshev)
+
+Currently some macros are required for the GPU implementation to work properly,
+such as CUDA_UM_ALLOC and BLOCKCOPY_TILE_I.  Others are optional but strongly
+recommended for best performance: HOST_LEVEL_SIZE_THRESHOLD, CUDA_UM_ALLOC,
+CUDA_UM_ZERO_COPY, CUDA_UM_HOST_ATTACH and CUDA_STENCIL_OPT_TEX.  All CUDA
+kernels are located in [cuda/](cuda/) folder and filenames usually match
+corresponding CPU functionality, i.e. for the Chebyshev smoother the GPU
+implementation can be found in [cuda/chebyshev.h](cuda/chebyshev.h), while CPU
+code is available in [operators/chebyshev.c](operators/chebyshev.c). The GPU
+code is tested on single node with one, two and four GPUs using CUDA-aware
+MVAPICH 2.1 and OpenMPI 1.8.7 with CUDA 7.
+
+GPU performance tuning
+===================
+
+Recommended HOST_LEVEL_SIZE_THRESHOLD value is around 10K elements for
+Kepler/Maxwell GPUs.  Recommended block copy dimensions (BLOCKCOPY_TILE_*) are
+64x2x8 but one can experiment to tune performance on particular hardware.  For
+better performance boundary conditions require different tile sizes which can
+be controlled by setting BC_TILE_*.  Supported GPU smoothers are GSRB and
+Chebyshev, although GSRB is not optimized and provides only a baseline
+implementation.  For multi-GPU configurations it is recommended to run as many
+MPI ranks as you have GPUs in your system.  Please note that if peer mappings
+are not available between GPUs then the system will fall back to using
+zero-copy memory which can perform very slowly.  This issue can be resolved by
+setting CUDA_VISIBLE_DEVICES environment variable to constrain which GPUs are
+visible for the system, or by setting CUDA_MANAGED_FORCE_DEVICE_ALLOC to a
+non-zero value.
 
 Compilation
 ===========

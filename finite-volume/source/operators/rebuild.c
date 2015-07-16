@@ -82,6 +82,9 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   zero_vector(level,      Aii_id);
   zero_vector(level,sumAbsAij_id);
 
+  // make sure GPU completed all its kernels
+  cudaDeviceSynchronize();
+
   // loop over all colors...
   for(kcolor=0;kcolor<colors_in_each_dim;kcolor++){
   for(jcolor=0;jcolor<colors_in_each_dim;jcolor++){
@@ -92,6 +95,9 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
     // exchange the boundary of x in preparation for Ax
     exchange_boundary(level,x_id,stencil_get_shape());
             apply_BCs(level,x_id,stencil_get_shape());
+
+    // make sure GPU completed all its kernels
+    cudaDeviceSynchronize();
  
     // apply the operator and add to Aii and AbsAij 
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)

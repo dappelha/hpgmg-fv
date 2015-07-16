@@ -27,6 +27,9 @@ def main():
     cf.add_argument('--CC', help='Path to C compiler', default=os.environ.get('CC',''))
     cf.add_argument('--CFLAGS', help='Flags for C compiler', default=os.environ.get('CFLAGS',''))
     cf.add_argument('--CPPFLAGS', help='Flags for C preprocessor', default=os.environ.get('CPPFLAGS',''))
+    cf.add_argument('--NVCC', help='Path to CUDA compiler', default=os.environ.get('CUDA_HOME','')+"/bin/nvcc")
+    cf.add_argument('--NVCCFLAGS', help='Flags for CUDA compiler', default='-O2')
+    cf.add_argument('--CUDAARCH', help='Compiler targets for NVCC (-gencode)', default='-gencode code=compute_35,arch=compute_35')
     cf.add_argument('--LDFLAGS', help='Flags to pass to linker', default=os.environ.get('LDFLAGS',''))
     cf.add_argument('--LDLIBS', help='Libraries to pass to linker', default=os.environ.get('LDLIBS',''))
     fe = parser.add_argument_group('Finite Element options')
@@ -68,6 +71,9 @@ def makefile(args):
         CC = args.CC
     m = ['HPGMG_ARCH = %s' % args.arch,
          'HPGMG_CC = %s' % CC,
+         'HPGMG_NVCC = %s' % args.NVCC,
+         'HPGMG_NVCC_FLAGS = %s' % args.NVCCFLAGS,
+         'HPGMG_CUDA_ARCH = %s' % args.CUDAARCH,
          'HPGMG_CFLAGS = %s' % (args.CFLAGS if args.CFLAGS else ('$(PCC_FLAGS) ' if args.petsc_dir else '')),
          'HPGMG_CPPFLAGS = %s' % (('$(CCPPFLAGS) ' if args.petsc_dir else '') + args.CPPFLAGS),
          'HPGMG_LDFLAGS = %s' % args.LDFLAGS,

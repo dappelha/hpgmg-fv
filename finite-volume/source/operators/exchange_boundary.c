@@ -47,9 +47,15 @@ void exchange_boundary(level_type * level, int id, int shape){
   // pack MPI send buffers...
   if(level->exchange_ghosts[shape].num_blocks[0]){
     _timeStart = CycleTime();
+    if(level->use_cuda) {
+      cuda_copy_block(*level,id,level->exchange_ghosts[shape],0);
+      cudaDeviceSynchronize();	// TODO: do we need this device sync?
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[shape].num_blocks[0])
     for(buffer=0;buffer<level->exchange_ghosts[shape].num_blocks[0];buffer++){
       CopyBlock(level,id,&level->exchange_ghosts[shape].blocks[0][buffer]);
+    }
     }
     _timeEnd = CycleTime();
     level->cycles.ghostZone_pack += (_timeEnd-_timeStart);
@@ -81,9 +87,15 @@ void exchange_boundary(level_type * level, int id, int shape){
   // exchange locally... try and hide within Isend latency... 
   if(level->exchange_ghosts[shape].num_blocks[1]){
     _timeStart = CycleTime();
+    if (level->use_cuda) {
+      cuda_copy_block(*level, id, level->exchange_ghosts[shape], 1);
+      cudaDeviceSynchronize();
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[shape].num_blocks[1])
     for(buffer=0;buffer<level->exchange_ghosts[shape].num_blocks[1];buffer++){
       CopyBlock(level,id,&level->exchange_ghosts[shape].blocks[1][buffer]);
+    }
     }
     _timeEnd = CycleTime();
     level->cycles.ghostZone_local += (_timeEnd-_timeStart);
@@ -103,9 +115,15 @@ void exchange_boundary(level_type * level, int id, int shape){
   // unpack MPI receive buffers 
   if(level->exchange_ghosts[shape].num_blocks[2]){
     _timeStart = CycleTime();
+    if(level->use_cuda) {
+      cuda_copy_block(*level,id,level->exchange_ghosts[shape],2);
+      cudaDeviceSynchronize();	// TODO: do we need this device sync?
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[shape].num_blocks[2])
     for(buffer=0;buffer<level->exchange_ghosts[shape].num_blocks[2];buffer++){
       CopyBlock(level,id,&level->exchange_ghosts[shape].blocks[2][buffer]);
+    }
     }
     _timeEnd = CycleTime();
     level->cycles.ghostZone_unpack += (_timeEnd-_timeStart);

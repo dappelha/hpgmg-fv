@@ -273,7 +273,8 @@ void build_interpolation(mg_type *all_grids){
           /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
           /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
           /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
-          /* subtype       = */ 0
+          /* subtype       = */ 0,
+	  /* access policy = */ all_grids->levels[level]->um_access_policy
         );
         offset+=elementSize;
       }
@@ -308,7 +309,8 @@ void build_interpolation(mg_type *all_grids){
           /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
           /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
           /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
-          /* subtype       = */ 0
+          /* subtype       = */ 0,
+	  /* access policy = */ all_grids->levels[level]->um_access_policy
         );
       }
     } // local to local interpolation
@@ -406,7 +408,8 @@ void build_interpolation(mg_type *all_grids){
           /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
           /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
           /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
-          /* subtype       = */ 0
+          /* subtype       = */ 0,
+	  /* access policy = */ all_grids->levels[level]->um_access_policy
         );
         offset+=elementSize;
       }
@@ -590,7 +593,8 @@ void build_restriction(mg_type *all_grids, int restrictionType){
           /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
           /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
           /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
-          /* subtype       = */ 0
+          /* subtype       = */ 0,
+	  /* access policy = */ all_grids->levels[level]->um_access_policy
         );
         offset+=elementSize;
       }
@@ -628,7 +632,8 @@ void build_restriction(mg_type *all_grids, int restrictionType){
           /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
           /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
           /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
-          /* subtype       = */ 0
+          /* subtype       = */ 0,
+	  /* access policy = */ all_grids->levels[level]->um_access_policy
         );
       }
     } // local to local
@@ -758,7 +763,8 @@ void build_restriction(mg_type *all_grids, int restrictionType){
           /* blockcopy_i   = */ BLOCKCOPY_TILE_I, // default
           /* blockcopy_j   = */ BLOCKCOPY_TILE_J, // default
           /* blockcopy_k   = */ BLOCKCOPY_TILE_K, // default
-          /* subtype       = */ 0
+          /* subtype       = */ 0,
+	  /* access policy = */ all_grids->levels[level]->um_access_policy
         );
         offset+=elementSize;
       }
@@ -919,7 +925,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   for(level=1;level<all_grids->num_levels;level++){
     all_grids->levels[level] = (level_type*)malloc(sizeof(level_type));
     if(all_grids->levels[level] == NULL){fprintf(stderr,"malloc failed - MGBuild/doRestrict\n");exit(0);}
-    create_level(all_grids->levels[level],boxes_in_i[level],box_dim[level],box_ghosts[level],all_grids->levels[level-1]->numVectors,all_grids->levels[level-1]->boundary_condition.type,all_grids->levels[level-1]->my_rank,nProcs[level]);
+    create_level(all_grids->levels[level],boxes_in_i[level],box_dim[level],box_ghosts[level],all_grids->levels[level-1]->numVectors,all_grids->levels[level-1]->boundary_condition.type,all_grids->levels[level-1]->my_rank,nProcs[level],all_grids->levels[level-1]);
     all_grids->levels[level]->h = 2.0*all_grids->levels[level-1]->h;
   }
 
@@ -1030,6 +1036,11 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
        smooth(all_grids->levels[level  ],e_id,R_id,a,b);
      residual(all_grids->levels[level  ],VECTOR_TEMP,e_id,R_id,a,b);
   restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],VECTOR_TEMP,RESTRICT_CELL);
+
+  // sync device if the current level is on GPU and the next level will be on CPU
+  if (all_grids->levels[level]->use_cuda && !all_grids->levels[level+1]->use_cuda)
+    cudaDeviceSynchronize();
+
   zero_vector(all_grids->levels[level+1],e_id);
   all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
 
@@ -1167,6 +1178,9 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   for(level=onLevel;level<(all_grids->num_levels-1);level++){
     uint64_t _LevelStart = CycleTime();
     restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],R_id,RESTRICT_CELL);
+    // sync device if the current level is on GPU and the next level will be on CPU
+    if (all_grids->levels[level]->use_cuda && !all_grids->levels[level+1]->use_cuda)
+      cudaDeviceSynchronize();
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
   }
 
