@@ -129,6 +129,7 @@ void cuda_apply_BCs_v1(level_type level, int x_id, int shape)
 {
   int block = APPLY_BCS_LINEAR_BLOCK_SIZE;
   int grid = (level.boundary_condition.num_blocks[shape]+APPLY_BCS_LINEAR_NUM_GROUPS-1)/APPLY_BCS_LINEAR_NUM_GROUPS;
+  if (grid <= 0) return;
 
   apply_BCs_v1_kernel<<<grid, block>>>(level, x_id, shape);
 }

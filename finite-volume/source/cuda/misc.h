@@ -195,6 +195,7 @@ void cuda_zero_vector(level_type d_level, int id)
 {
   int block = MISC_THREAD_BLOCK_SIZE;
   int grid = d_level.num_my_blocks;
+  if (grid <= 0) return;
 
   zero_vector_kernel<<<grid, block>>>(d_level, id);
 } 
@@ -204,6 +205,7 @@ void cuda_scale_vector(level_type d_level, int id_c, double scale_a, int id_a)
 {
   int block = MISC_THREAD_BLOCK_SIZE;
   int grid = d_level.num_my_blocks;
+  if (grid <= 0) return;
 
   axpy_vector_kernel<0><<<grid, block>>>(d_level, id_c, scale_a, 0.0, 0.0, id_a, id_a);
 }
@@ -213,6 +215,7 @@ void cuda_shift_vector(level_type d_level, int id_c, double shift_a, int id_a)
 {
   int block = MISC_THREAD_BLOCK_SIZE;
   int grid = d_level.num_my_blocks;
+  if (grid <= 0) return;
 
   axpy_vector_kernel<0><<<grid, block>>>(d_level, id_c, 1.0, shift_a, 0.0, id_a, id_a);
 }
@@ -222,6 +225,7 @@ void cuda_mul_vectors(level_type d_level, int id_c, double scale, int id_a, int 
 {
   int block = MISC_THREAD_BLOCK_SIZE;
   int grid = d_level.num_my_blocks;
+  if (grid <= 0) return;
 
   axpy_vector_kernel<1><<<grid, block>>>(d_level, id_c, scale, 0.0, 0.0, id_a, id_b);
 }
@@ -231,6 +235,7 @@ void cuda_add_vectors(level_type d_level, int id_c, double scale_a, int id_a, do
 {
   int block = MISC_THREAD_BLOCK_SIZE;
   int grid = d_level.num_my_blocks;
+  if (grid <= 0) return;
 
   axpy_vector_kernel<0><<<grid, block>>>(d_level, id_c, scale_a, 0.0, scale_b, id_a, id_b);
 }
@@ -240,6 +245,7 @@ double cuda_sum(level_type d_level, int id)
 {
   int block = MISC_THREAD_BLOCK_SIZE;
   int grid = d_level.num_my_blocks;
+  if (grid <= 0) return 0.0;
 
   double *d_res;
   double h_res[1];
@@ -261,6 +267,7 @@ double cuda_max_abs(level_type d_level, int id)
 {
   int block = MISC_THREAD_BLOCK_SIZE;
   int grid = d_level.num_my_blocks;
+  if (grid <= 0) return 0.0;
 
   double *d_res;
   double h_res[1];

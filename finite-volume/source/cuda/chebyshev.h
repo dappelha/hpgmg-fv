@@ -253,6 +253,8 @@ extern "C"
 void cuda_cheby_smooth(level_type d_level, int x_id, int rhs_id, double a, double b, int s, double *d_chebyshev_c1, double *d_chebyshev_c2)
 {
   int num_blocks = d_level.num_my_blocks;
+  if (num_blocks <= 0) return;
+
   int log_dim_i = (int)log2((double)d_level.dim.i);
   int block_dim_i = min(d_level.box_dim, BLOCKCOPY_TILE_I);
   int block_dim_k = min(d_level.box_dim, BLOCKCOPY_TILE_K);

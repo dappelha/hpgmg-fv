@@ -201,6 +201,8 @@ extern "C"
 void cuda_gsrb_smooth(level_type d_level, int phi_id, int rhs_id, double a, double b, int s)
 {
   int num_blocks = d_level.num_my_blocks;
+  if (num_blocks <= 0) return;
+
   int log_dim_i = (int)log2((double)d_level.dim.i);
   int block_dim_i = min(d_level.box_dim, BLOCKCOPY_TILE_I);
   int block_dim_k = min(d_level.box_dim, BLOCKCOPY_TILE_K);

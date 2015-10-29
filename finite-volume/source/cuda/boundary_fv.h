@@ -326,6 +326,7 @@ void cuda_apply_BCs_v1(level_type level, int x_id, int shape)
 {
   int block = APPLY_BCS_V1_BLOCK_SIZE;
   int grid = level.boundary_condition.num_blocks[shape];
+  if (grid <= 0) return;
 
   apply_BCs_v1_kernel<<<grid, block>>>(level, x_id, shape);
 }
@@ -335,6 +336,7 @@ void cuda_apply_BCs_v2(level_type level, int x_id, int shape)
 {
   int block = APPLY_BCS_V2_BLOCK_SIZE;
   int grid = (level.boundary_condition.num_blocks[shape]+APPLY_BCS_V2_NUM_GROUPS-1)/APPLY_BCS_V2_NUM_GROUPS;
+  if (grid <= 0) return;
 
   if(level.box_ghosts>1){
     zero_ghost_region_kernel<<<grid, block>>>(level, x_id, shape);

@@ -23,6 +23,8 @@ void exchange_boundary(level_type * level, int id, int shape){
   MPI_Request *recv_requests = level->exchange_ghosts[shape].requests;
   MPI_Request *send_requests = level->exchange_ghosts[shape].requests + level->exchange_ghosts[shape].num_recvs;
 
+  cudaDeviceSynchronize();	// wait for any outstading GPU work to finish
+
   // loop through packed list of MPI receives and prepost Irecv's...
   if(level->exchange_ghosts[shape].num_recvs>0){
     _timeStart = CycleTime();

@@ -36,9 +36,6 @@ OPTS+="-DCUDA_UM_HOST_ATTACH "
 # stencil kernel optimizations
 OPTS+="-DCUDA_STENCIL_OPT_TEX "
 
-# check which devices have peer-to-peer
-OPTS+="-DCUDA_CHECK_P2P "
-
 # override MVAPICH flags for C++
 OPTS+="-DMPICH_IGNORE_CXX_SEEK "
 OPTS+="-DMPICH_SKIP_MPICXX "

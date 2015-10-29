@@ -47,22 +47,33 @@
 #include "solvers.h"
 #include "cuda/common.h"
 //------------------------------------------------------------------------------------------------------------------------------
-void cudaCheckPeerToPeer(){
+// Print device info
+int cudaCheckPeerToPeer(int rank){
   int ndev = 0;
   int peer = 0;
-  int i,j;
 
   // query number of GPU devices in the system
   cudaGetDeviceCount(&ndev);
-  printf("# of devices:  %d\n",ndev);
+  printf("rank %d:  Number of visible GPUs:  %d\n",rank,ndev);
 
-  // check for peer to peer mappings
-  for(i=0;i<ndev;i++)
-    for(j=i+1;j<ndev;j++)
-    {
-      cudaDeviceCanAccessPeer(&peer,i,j);
-      printf("is peer to peer enabled between devices %d and %d:  %d\n",i,j,peer);
-    }
+  // Print device properties
+  /*for(int i=0;i<ndev;i++){
+    struct cudaDeviceProp devProp;
+    cudaGetDeviceProperties(&devProp,i);
+    printf("rank %d:  name = %s, global memory = %u\n",rank,devProp.name,devProp.totalGlobalMem);
+  }*/
+
+  // Check for peer to peer mappings
+  for(int i=0;i<ndev;i++)
+  for(int j=i+1;j<ndev;j++){
+    struct cudaDeviceProp devPropi,devPropj;
+    cudaGetDeviceProperties(&devPropi,i);
+    cudaGetDeviceProperties(&devPropj,j);
+
+    cudaDeviceCanAccessPeer(&peer,i,j);
+    printf("rank %d:  Peer access from %s (GPU%d) -> %s (GPU%d) : %s\n",rank,devPropi.name,i,devPropj.name,j,peer?"Yes":"No");
+  }
+  return ndev;
 }
 
 void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dtol, double rtol){
@@ -126,6 +137,7 @@ int main(int argc, char **argv){
   int my_rank=0;
   int num_tasks=1;
   int OMP_Threads = 1;
+  int num_devices = 1;
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  
   #ifdef _OPENMP
@@ -156,7 +168,8 @@ int main(int argc, char **argv){
   MPI_Comm_size(MPI_COMM_WORLD, &num_tasks);
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   // Set CUDA device for this rank...
-  cudaSetDevice(my_rank);
+  num_devices = cudaCheckPeerToPeer(my_rank);
+  cudaSetDevice(my_rank % num_devices);
 //if(actual_threading_model>requested_threading_model)actual_threading_model=requested_threading_model;
   if(my_rank==0){
        if(requested_threading_model == MPI_THREAD_MULTIPLE  )fprintf(stdout,"Requested MPI_THREAD_MULTIPLE, ");
@@ -177,10 +190,6 @@ int main(int argc, char **argv){
   #endif
   #endif // USE_MPI
 
-#ifdef CUDA_CHECK_P2P
-  if(my_rank==0)
-    cudaCheckPeerToPeer();
-#endif
   NVTX_PUSH("main",1)  // start NVTX profiling
 
   int log2_box_dim = 6;
