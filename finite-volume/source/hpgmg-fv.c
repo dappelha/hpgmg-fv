@@ -54,7 +54,7 @@ int cudaCheckPeerToPeer(int rank){
 
   // query number of GPU devices in the system
   cudaGetDeviceCount(&ndev);
-  printf("rank %d:  Number of visible GPUs:  %d\n",rank,ndev);
+  //printf("rank %d:  Number of visible GPUs:  %d\n",rank,ndev); // Too verbose at scale
 
   // Print device properties
   /*for(int i=0;i<ndev;i++){
@@ -71,7 +71,7 @@ int cudaCheckPeerToPeer(int rank){
     cudaGetDeviceProperties(&devPropj,j);
 
     cudaDeviceCanAccessPeer(&peer,i,j);
-    printf("rank %d:  Peer access from %s (GPU%d) -> %s (GPU%d) : %s\n",rank,devPropi.name,i,devPropj.name,j,peer?"Yes":"No");
+    //printf("rank %d:  Peer access from %s (GPU%d) -> %s (GPU%d) : %s\n",rank,devPropi.name,i,devPropj.name,j,peer?"Yes":"No"); // Too verbose at scale
   }
   return ndev;
 }
@@ -230,7 +230,7 @@ int main(int argc, char **argv){
     #endif
     exit(0);
   }
-
+ 
   if(my_rank==0){fprintf(stdout,"%d MPI Tasks of %d threads\n",num_tasks,OMP_Threads);}
   if(my_rank==0){fprintf(stdout,"\n\n===== Benchmark setup ===============================================\n");}
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -  

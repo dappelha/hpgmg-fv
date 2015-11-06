@@ -177,6 +177,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
     _timeStart = CycleTime();
     if (level_f->use_cuda) {
       cuda_restriction(*level_c, id_c, *level_f, id_f, level_f->restriction[restrictionType], restrictionType, 1);
+      /*if(!level_c->use_cuda)*/cudaDeviceSynchronize();
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[1])

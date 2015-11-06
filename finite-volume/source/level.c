@@ -1145,26 +1145,17 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   level->my_blocks        = NULL;
   level->num_my_blocks    = 0;
   level->allocated_blocks = 0;
+  level->use_cuda         = 0;
   level->tag              = log2(level->dim.i);
+  level->um_access_policy = UM_ACCESS_CPU;
 
   // determine if this level is big enough so that it makes sense to run on GPU
-  level->use_cuda = (level->dim.i * level->dim.j * level->dim.k > HOST_LEVEL_SIZE_THRESHOLD);
+  //level->use_cuda = (level->dim.i * level->dim.j * level->dim.k > HOST_LEVEL_SIZE_THRESHOLD); // this is the global problem size
 
   // we will allocate this memory later on demand
   level->chebyshev_c1 = NULL;
   level->chebyshev_c2 = NULL;
 
-#ifdef CUDA_UM_ALLOC
-  // determine CPU/GPU access policy for this level
-  if (level->use_cuda)
-    level->um_access_policy = UM_ACCESS_GPU;		// exclusively accessed by GPU
-  else if (parent_level == NULL)
-    level->um_access_policy = UM_ACCESS_CPU;		// finest level exclusively accessed by CPU
-  else if (parent_level->um_access_policy == UM_ACCESS_GPU)
-    level->um_access_policy = UM_ACCESS_BOTH;		// maybe accessed by CPU or GPU (not concurrently)
-  else
-    level->um_access_policy = UM_ACCESS_CPU;		// coarse level exclusively accessed by CPU
-#endif
 
   // allocate 3D array of integers to hold the MPI rank of the corresponding box and initialize to -1 (unassigned)
      level->rank_of_box = (int*)malloc(level->boxes_in.i*level->boxes_in.j*level->boxes_in.k*sizeof(int));
@@ -1197,10 +1188,28 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   if(my_rank==0){fprintf(stdout,"done\n");fflush(stdout);}
 //print_decomposition(level);// for debug purposes only
 
-
   // calculate how many boxes I own...
   level->num_my_boxes=0;
   for(box=0;box<level->boxes_in.i*level->boxes_in.j*level->boxes_in.k;box++){if(level->rank_of_box[box]==level->my_rank)level->num_my_boxes++;} 
+
+  // determine if this level is big enough so that it makes sense to run on GPU
+  level->use_cuda = (level->box_dim * level->box_dim * level->box_dim * level->num_my_boxes > HOST_LEVEL_SIZE_THRESHOLD); // this is the local problem size
+  if( (parent_level != NULL) && (parent_level->use_cuda==0) ){level->use_cuda=0;} // once we switch to using the CPU, all coarser grids are on the CPU // FIX !!!
+  if(my_rank==0){if(level->use_cuda)fprintf(stdout,"  This level will be run on the GPU\n");else fprintf(stdout,"  This level will be run on the host\n");fflush(stdout);}
+
+#ifdef CUDA_UM_ALLOC
+  // determine CPU/GPU access policy for this level
+  if (level->use_cuda)
+    level->um_access_policy = UM_ACCESS_GPU;		// exclusively accessed by GPU
+  else if (parent_level == NULL)
+    level->um_access_policy = UM_ACCESS_CPU;		// finest level exclusively accessed by CPU
+  else if (parent_level->um_access_policy == UM_ACCESS_GPU)
+    level->um_access_policy = UM_ACCESS_BOTH;		// maybe accessed by CPU or GPU (not concurrently)
+  else
+    level->um_access_policy = UM_ACCESS_CPU;		// coarse level exclusively accessed by CPU
+#endif
+
+  // allocate my list of boxes
   level->my_boxes = (box_type*)um_malloc(level->num_my_boxes*sizeof(box_type), level->um_access_policy);
   if((level->num_my_boxes>0)&&(level->my_boxes==NULL)){fprintf(stderr,"malloc failed - create_level/level->my_boxes\n");exit(0);}
 
@@ -1435,15 +1444,15 @@ void destroy_level(level_type *level){
   // restriction mini programs...
   for(i=0;i<4;i++){
     if(level->restriction[i].num_recvs>0){
-    //for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])free(level->restriction[i].recv_buffers[j]);
-    if(level->restriction[i].recv_buffers[0])free(level->restriction[i].recv_buffers[0]); // allocated in bulk
+    for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])um_free(level->restriction[i].recv_buffers[j]);
+    //if(level->restriction[i].recv_buffers[0])um_free(level->restriction[i].recv_buffers[0]); // allocated in bulk
     if(level->restriction[i].recv_buffers   )free(level->restriction[i].recv_buffers   );
     if(level->restriction[i].recv_ranks     )free(level->restriction[i].recv_ranks     );
     if(level->restriction[i].recv_sizes     )free(level->restriction[i].recv_sizes     );
     }
     if(level->restriction[i].num_sends>0){
-    //for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])free(level->restriction[i].send_buffers[j]);
-    if(level->restriction[i].send_buffers[0])free(level->restriction[i].send_buffers[0]); // allocated in bulk
+    for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])um_free(level->restriction[i].send_buffers[j]);
+    //if(level->restriction[i].send_buffers[0])um_free(level->restriction[i].send_buffers[0]); // allocated in bulk
     if(level->restriction[i].send_buffers   )free(level->restriction[i].send_buffers   );
     if(level->restriction[i].send_ranks     )free(level->restriction[i].send_ranks     );
     if(level->restriction[i].send_sizes     )free(level->restriction[i].send_sizes     );
@@ -1459,15 +1468,15 @@ void destroy_level(level_type *level){
 
   // interpolation mini programs...
   if(level->interpolation.num_recvs>0){
-  //for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])free(level->interpolation.recv_buffers[j]);
-  if(level->interpolation.recv_buffers[0])free(level->interpolation.recv_buffers[0]); // allocated in bulk
+  for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])um_free(level->interpolation.recv_buffers[j]);
+  //if(level->interpolation.recv_buffers[0])um_free(level->interpolation.recv_buffers[0]); // allocated in bulk
   if(level->interpolation.recv_buffers   )free(level->interpolation.recv_buffers   );
   if(level->interpolation.recv_ranks     )free(level->interpolation.recv_ranks     );
   if(level->interpolation.recv_sizes     )free(level->interpolation.recv_sizes     );
   }
   if(level->interpolation.num_sends>0){
-  //for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])free(level->interpolation.send_buffers[j]);
-  if(level->interpolation.send_buffers[0])free(level->interpolation.send_buffers[0]); // allocated in bulk
+  for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])um_free(level->interpolation.send_buffers[j]);
+  //if(level->interpolation.send_buffers[0])um_free(level->interpolation.send_buffers[0]); // allocated in bulk
   if(level->interpolation.send_buffers   )free(level->interpolation.send_buffers   );
   if(level->interpolation.send_ranks     )free(level->interpolation.send_ranks     );
   if(level->interpolation.send_sizes     )free(level->interpolation.send_sizes     );
@@ -1502,6 +1511,7 @@ void *um_malloc(size_t size, int access_policy)
 #endif
     break;
   case UM_ACCESS_CPU:
+  return malloc(size);
 #ifdef CUDA_UM_HOST_ATTACH
     // attach to host since we will never access these coarse levels from GPU
     cudaMallocManaged(&ptr, size, cudaMemAttachHost);

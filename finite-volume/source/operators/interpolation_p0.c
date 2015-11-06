@@ -129,8 +129,9 @@ void interpolation_p0(level_type * level_f, int id_f, double prescale_f, level_t
   // perform local interpolation... try and hide within Isend latency... 
   if(level_c->interpolation.num_blocks[1]>0){
     _timeStart = CycleTime();
-    if (level_f->use_cuda) {
+    if (level_c->use_cuda) {
       cuda_interpolation_pc(*level_f, id_f, prescale_f, *level_c, id_c, level_c->interpolation, 1);
+      /*if(!level_f->use_cuda)*/cudaDeviceSynchronize();
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[1])

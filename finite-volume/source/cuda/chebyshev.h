@@ -235,17 +235,27 @@ __global__ void cheby_smooth_kernel(level_type level, int x_id, int rhs_id, doub
 // maximum supported level can have 2^10 dimension
 #define CHEBY_KERNEL_DETECT_LEVEL(log_dim_i) \
 	switch (log_dim_i) { \
-        case 0: { CHEBY_KERNEL(0) break; } \
-        case 1: { CHEBY_KERNEL(1) break; } \
-        case 2: { CHEBY_KERNEL(2) break; } \
-        case 3: { CHEBY_KERNEL(3) break; } \
-        case 4: { CHEBY_KERNEL(4) break; } \
-        case 5: { CHEBY_KERNEL(5) break; } \
-        case 6: { CHEBY_KERNEL(6) break; } \
-        case 7: { CHEBY_KERNEL(7) break; } \
-        case 8: { CHEBY_KERNEL(8) break; } \
-        case 9: { CHEBY_KERNEL(9) break; } \
+        case  0: { CHEBY_KERNEL( 0) break; } \
+        case  1: { CHEBY_KERNEL( 1) break; } \
+        case  2: { CHEBY_KERNEL( 2) break; } \
+        case  3: { CHEBY_KERNEL( 3) break; } \
+        case  4: { CHEBY_KERNEL( 4) break; } \
+        case  5: { CHEBY_KERNEL( 5) break; } \
+        case  6: { CHEBY_KERNEL( 6) break; } \
+        case  7: { CHEBY_KERNEL( 7) break; } \
+        case  8: { CHEBY_KERNEL( 8) break; } \
+        case  9: { CHEBY_KERNEL( 9) break; } \
         case 10: { CHEBY_KERNEL(10) break; } \
+        case 11: { CHEBY_KERNEL(11) break; } \
+        case 12: { CHEBY_KERNEL(12) break; } \
+        case 13: { CHEBY_KERNEL(13) break; } \
+        case 14: { CHEBY_KERNEL(14) break; } \
+        case 15: { CHEBY_KERNEL(15) break; } \
+        case 16: { CHEBY_KERNEL(16) break; } \
+        case 17: { CHEBY_KERNEL(17) break; } \
+        case 18: { CHEBY_KERNEL(18) break; } \
+        case 19: { CHEBY_KERNEL(19) break; } \
+        case 20: { CHEBY_KERNEL(20) break; } \
 	default: { printf("ERROR: this level size is not supported in the GPU path, please update the macros!\n"); } \
         }
 
