@@ -23,7 +23,7 @@ void exchange_boundary(level_type * level, int id, int shape){
   MPI_Request *recv_requests = level->exchange_ghosts[shape].requests;
   MPI_Request *send_requests = level->exchange_ghosts[shape].requests + level->exchange_ghosts[shape].num_recvs;
 
-  cudaDeviceSynchronize();	// wait for any outstading GPU work to finish
+  if(level->use_cuda)cudaDeviceSynchronize();	// wait for any outstading GPU work to finish
 
   // loop through packed list of MPI receives and prepost Irecv's...
   if(level->exchange_ghosts[shape].num_recvs>0){
@@ -51,7 +51,7 @@ void exchange_boundary(level_type * level, int id, int shape){
     _timeStart = CycleTime();
     if(level->use_cuda) {
       cuda_copy_block(*level,id,level->exchange_ghosts[shape],0);
-      cudaDeviceSynchronize();	// TODO: do we need this device sync?
+      cudaDeviceSynchronize();	// synchronize so the CPU sees the updated buffers
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[shape].num_blocks[0])
@@ -91,7 +91,6 @@ void exchange_boundary(level_type * level, int id, int shape){
     _timeStart = CycleTime();
     if (level->use_cuda) {
       cuda_copy_block(*level, id, level->exchange_ghosts[shape], 1);
-      cudaDeviceSynchronize();
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[shape].num_blocks[1])
@@ -109,6 +108,7 @@ void exchange_boundary(level_type * level, int id, int shape){
   if(nMessages){
     _timeStart = CycleTime();
     MPI_Waitall(nMessages,level->exchange_ghosts[shape].requests,level->exchange_ghosts[shape].status);
+    cudaDeviceSynchronize();  // FIX... is this really necessary??
     _timeEnd = CycleTime();
     level->cycles.ghostZone_wait += (_timeEnd-_timeStart);
   }
@@ -119,7 +119,6 @@ void exchange_boundary(level_type * level, int id, int shape){
     _timeStart = CycleTime();
     if(level->use_cuda) {
       cuda_copy_block(*level,id,level->exchange_ghosts[shape],2);
-      cudaDeviceSynchronize();	// TODO: do we need this device sync?
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[shape].num_blocks[2])

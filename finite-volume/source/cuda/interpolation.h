@@ -104,7 +104,7 @@ __global__ void interpolation_kernel(level_type level_f, int id_f, double presca
 }
 
 extern "C"
-void cuda_interpolation_pc(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type)
+void cuda_interpolation_p0(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type)
 {
   int block = INTERPOLATION_THREAD_BLOCK_SIZE;
   int grid = interpolation.num_blocks[block_type];
@@ -118,7 +118,7 @@ void cuda_interpolation_pc(level_type d_level_f, int id_f, double prescale_f, le
 } 
 
 extern "C"
-void cuda_interpolation_pl(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type)
+void cuda_interpolation_p1(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type)
 {
   int block = INTERPOLATION_THREAD_BLOCK_SIZE;
   int grid = interpolation.num_blocks[block_type];

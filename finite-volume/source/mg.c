@@ -975,7 +975,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (all_grids->levels[level]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero==1)) )all_grids->levels[level]->must_subtract_mean = 1;
   }
 
-  
+  cudaDeviceSynchronize(); 
   all_grids->cycles.MGBuild += (uint64_t)(CycleTime()-_timeStartMGBuild);
 }
 
@@ -1031,11 +1031,6 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
        smooth(all_grids->levels[level  ],e_id,R_id,a,b);
      residual(all_grids->levels[level  ],VECTOR_TEMP,e_id,R_id,a,b);
   restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],VECTOR_TEMP,RESTRICT_CELL);
-
-  // sync device if the current level is on GPU and the next level will be on CPU
-  if (all_grids->levels[level]->use_cuda && !all_grids->levels[level+1]->use_cuda)
-    cudaDeviceSynchronize();
-
   zero_vector(all_grids->levels[level+1],e_id);
   all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
 
@@ -1132,6 +1127,7 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
 //------------------------------------------------------------------------------------------------------------------------------
 void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
   all_grids->MGSolves_performed++;
+  cudaDeviceSynchronize();
   if(!all_grids->levels[onLevel]->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef UNLIMIT_FMG_VCYCLES
@@ -1173,9 +1169,6 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   for(level=onLevel;level<(all_grids->num_levels-1);level++){
     uint64_t _LevelStart = CycleTime();
     restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],R_id,RESTRICT_CELL);
-    // sync device if the current level is on GPU and the next level will be on CPU
-    if (all_grids->levels[level]->use_cuda && !all_grids->levels[level+1]->use_cuda)
-      cudaDeviceSynchronize();
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
   }
 

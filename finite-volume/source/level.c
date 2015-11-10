@@ -720,7 +720,7 @@ void build_exchange_ghosts(level_type *level, int shape){
     int neighbor;
     for(neighbor=0;neighbor<numSendRanks;neighbor++){
       if(stage==1){
-             level->exchange_ghosts[shape].send_buffers[neighbor] = (double*)um_malloc(level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double), level->um_access_policy);
+             level->exchange_ghosts[shape].send_buffers[neighbor] = (double*)um_malloc(level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double), UM_ACCESS_BOTH); // i.e. zero copy
           if(level->exchange_ghosts[shape].send_sizes[neighbor]>0)
           if(level->exchange_ghosts[shape].send_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].send_buffers[neighbor]\n",shape);exit(0);}
       memset(level->exchange_ghosts[shape].send_buffers[neighbor],                0,level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
@@ -906,7 +906,7 @@ void build_exchange_ghosts(level_type *level, int shape){
     int neighbor;
     for(neighbor=0;neighbor<numRecvRanks;neighbor++){
       if(stage==1){
-             level->exchange_ghosts[shape].recv_buffers[neighbor] = (double*)um_malloc(level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double), level->um_access_policy);
+             level->exchange_ghosts[shape].recv_buffers[neighbor] = (double*)um_malloc(level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double), UM_ACCESS_BOTH); // i.e. zero copy
           if(level->exchange_ghosts[shape].recv_sizes[neighbor]>0)
           if(level->exchange_ghosts[shape].recv_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - exchange_ghosts[%d].recv_buffers[neighbor]\n",shape);exit(0);}
       memset(level->exchange_ghosts[shape].recv_buffers[neighbor],                0,level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
@@ -1017,7 +1017,7 @@ void create_vectors(level_type *level, int numVectors){
   level->box_volume  = level->box_kStride*(level->box_dim+2*level->box_ghosts);while(level->box_volume  % BOX_ALIGN_VOLUME )level->box_volume++;  // volume
 
 
-  #define VECTOR_MALLOC_BULK
+  //#define VECTOR_MALLOC_BULK
   #ifdef  VECTOR_MALLOC_BULK
     // allocate one aligned, double-precision array and divide it among vectors...
     uint64_t malloc_size = (uint64_t)numVectors*level->num_my_boxes*level->box_volume*sizeof(double) + 4096;
@@ -1497,21 +1497,27 @@ void *um_malloc(size_t size, int access_policy)
 {
 #ifdef CUDA_UM_ALLOC
   void *ptr;
+  cudaError_t rv;
   switch (access_policy) {
   case UM_ACCESS_GPU:
-    cudaMallocManaged(&ptr, size, cudaMemAttachGlobal);
+    rv = cudaMallocManaged(&ptr, size, cudaMemAttachGlobal);
+    if(rv!=cudaSuccess){printf("cudaMallocManaged(...,%ld,cudaMemAttachGlobal) failed: %s\n",size,cudaGetErrorString(rv));fflush(stdout);exit(0);}
     break;
   case UM_ACCESS_BOTH:
 #ifdef CUDA_UM_ZERO_COPY
     // assumes that the direct access to sysmem is supported on this OS/GPU
-    cudaHostAlloc(&ptr, size, cudaHostAllocDefault);
+    rv = cudaHostAlloc(&ptr, size, cudaHostAllocDefault);
+    if(rv!=cudaSuccess){printf("cudaHostAlloc(...,%ld,cudaHostAllocDefault) failed: %s\n",size,cudaGetErrorString(rv));fflush(stdout);exit(0);}
 #else
     // default is the managed allocation with global attach
-    cudaMallocManaged(&ptr, size, cudaMemAttachGlobal);
+    rv = cudaMallocManaged(&ptr, size, cudaMemAttachGlobal);
+    if(rv!=cudaSuccess){printf("cudaMallocManaged(...,%ld,cudaMemAttachGlobal) failed: %s\n",size,cudaGetErrorString(rv));fflush(stdout);exit(0);}
 #endif
     break;
   case UM_ACCESS_CPU:
-  return malloc(size);
+    return malloc(size);
+    break;
+/*
 #ifdef CUDA_UM_HOST_ATTACH
     // attach to host since we will never access these coarse levels from GPU
     cudaMallocManaged(&ptr, size, cudaMemAttachHost);
@@ -1520,6 +1526,7 @@ void *um_malloc(size_t size, int access_policy)
     cudaMallocManaged(&ptr, size, cudaMemAttachGlobal);
 #endif
     break;
+*/
   }
   return ptr;
 #else
@@ -1530,6 +1537,7 @@ void *um_malloc(size_t size, int access_policy)
 
 void *um_realloc(void *ptr, size_t size, int access_policy)
 {
+  if(access_policy==UM_ACCESS_CPU)return(realloc(ptr, size));
   void *new_ptr;
 #ifdef CUDA_UM_ALLOC
   new_ptr = um_malloc(size, access_policy);

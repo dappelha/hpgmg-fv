@@ -55,6 +55,8 @@ void initialize_valid_region(level_type * level){
   uint64_t _timeStart = CycleTime();
   int block;
 
+  if(level->use_cuda)cudaDeviceSynchronize();
+
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -104,6 +106,8 @@ void init_vector(level_type * level, int id_a, double scalar){
   // initializes the grid to a scalar while zero'ing the ghost zones...
   uint64_t _timeStart = CycleTime();
   int block;
+
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
@@ -236,6 +240,8 @@ void invert_vector(level_type * level, int id_c, double scale_a, int id_a){
 
   int block;
 
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX !!!
+
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -313,6 +319,8 @@ double dot(level_type * level, int id_a, int id_b){
 
   int block;
   double a_dot_b_level =  0.0;
+
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,block,level->num_my_blocks,a_dot_b_level)
   for(block=0;block<level->num_my_blocks;block++){
@@ -528,6 +536,8 @@ void color_vector(level_type * level, int id_a, int colors_in_each_dim, int icol
   uint64_t _timeStart = CycleTime();
   int block;
 
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
+
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -564,6 +574,8 @@ void color_vector(level_type * level, int id_a, int colors_in_each_dim, int icol
 void random_vector(level_type * level, int id_a){
   uint64_t _timeStart = CycleTime();
   int block;
+
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){

@@ -80,6 +80,8 @@ void initialize_problem(level_type * level, double hLevel, double a, double b){
   level->h = hLevel;
 
   int box;
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... wait for GPU before initializing any data
+
   for(box=0;box<level->num_my_boxes;box++){
     int i,j,k;
     const int jStride = level->my_boxes[box].jStride;

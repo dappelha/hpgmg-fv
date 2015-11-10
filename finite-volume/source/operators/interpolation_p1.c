@@ -108,9 +108,9 @@ void interpolation_p1(level_type * level_f, int id_f, double prescale_f, level_t
   // pack MPI send buffers...
   if(level_c->interpolation.num_blocks[0]>0){
     _timeStart = CycleTime();
-    if(level_c->use_cuda) {
-      cuda_interpolation_pc(*level_f,id_f,0.0,*level_c,id_c,level_c->interpolation,0);
-      cudaDeviceSynchronize();
+    if(level_f->use_cuda) {
+      cuda_interpolation_p1(*level_f,id_f,0.0,*level_c,id_c,level_c->interpolation,0);
+      cudaDeviceSynchronize(); // synchronize so the CPU sees the updated buffers
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[0])
@@ -149,9 +149,8 @@ void interpolation_p1(level_type * level_f, int id_f, double prescale_f, level_t
   // perform local interpolation... try and hide within Isend latency... 
   if(level_c->interpolation.num_blocks[1]>0){
     _timeStart = CycleTime();
-    if (level_c->use_cuda) {
-      cuda_interpolation_pl(*level_f, id_f, prescale_f, *level_c, id_c, level_c->interpolation, 1);
-      /*if(!level_f->use_cuda)*/cudaDeviceSynchronize();
+    if (level_f->use_cuda) {
+      cuda_interpolation_p1(*level_f, id_f, prescale_f, *level_c, id_c, level_c->interpolation, 1);
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[1])
@@ -169,6 +168,7 @@ void interpolation_p1(level_type * level_f, int id_f, double prescale_f, level_t
   if(nMessages>0){
     _timeStart = CycleTime();
     MPI_Waitall(nMessages,level_f->interpolation.requests,level_f->interpolation.status);
+    cudaDeviceSynchronize();  // FIX... is this really necessary??
     _timeEnd = CycleTime();
     level_f->cycles.interpolation_wait += (_timeEnd-_timeStart);
   }
