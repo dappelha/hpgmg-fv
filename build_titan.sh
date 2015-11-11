@@ -25,7 +25,7 @@ OPTS+="-DHOST_LEVEL_SIZE_THRESHOLD=10000 "
 OPTS+="-DUSE_NAIVE_INTERP "
 
 # max number of solves after warmup
-OPTS+="-DMAX_SOLVES=1 "
+OPTS+="-DMAX_SOLVES=10 "
 
 # unified memory allocation options
 OPTS+="-DCUDA_UM_ALLOC "

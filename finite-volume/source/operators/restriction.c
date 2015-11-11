@@ -102,6 +102,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   int my_tag = (level_f->tag<<4) | 0x5;
 
 
+  if(level_f->use_cuda)cudaDeviceSynchronize(); // synchronize so any buffer packing sees the GPU's latest updates
 
 
   #ifdef USE_MPI
@@ -109,7 +110,6 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   int nMessages = level_c->restriction[restrictionType].num_recvs + level_f->restriction[restrictionType].num_sends;
   MPI_Request *recv_requests = level_f->restriction[restrictionType].requests;
   MPI_Request *send_requests = level_f->restriction[restrictionType].requests + level_c->restriction[restrictionType].num_recvs;
-
 
   // loop through packed list of MPI receives and prepost Irecv's...
   if(level_c->restriction[restrictionType].num_recvs>0){
@@ -135,9 +135,9 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // pack MPI send buffers...
   if(level_f->restriction[restrictionType].num_blocks[0]>0){
     _timeStart = CycleTime();
-    if(level_f->use_cuda) {
+    if(level_c->use_cuda) {
       cuda_restriction(*level_c,id_c,*level_f,id_f,level_f->restriction[restrictionType],restrictionType,0);
-      cudaDeviceSynchronize();
+      cudaDeviceSynchronize(); // ensure CPU/NIC can see updated buffers
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[0])
@@ -175,7 +175,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // perform local restriction[restrictionType]... try and hide within Isend latency... 
   if(level_f->restriction[restrictionType].num_blocks[1]>0){
     _timeStart = CycleTime();
-    if (level_f->use_cuda) {
+    if (level_c->use_cuda) {
       cuda_restriction(*level_c, id_c, *level_f, id_f, level_f->restriction[restrictionType], restrictionType, 1);
     }
     else {
@@ -194,9 +194,11 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   if(nMessages){
     _timeStart = CycleTime();
     MPI_Waitall(nMessages,level_f->restriction[restrictionType].requests,level_f->restriction[restrictionType].status);
+    cudaDeviceSynchronize(); // FIX... is this really necessary??
     _timeEnd = CycleTime();
     level_f->cycles.restriction_wait += (_timeEnd-_timeStart);
   }
+
 
 
   // unpack MPI receive buffers 

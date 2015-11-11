@@ -237,17 +237,17 @@ void build_interpolation(mg_type *all_grids){
     }
 
     int elementSize = all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim*all_grids->levels[level-1]->box_dim;
-    double * all_send_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
-          if(numFineBoxesRemote*elementSize>0)
-          if(all_send_buffers==NULL){fprintf(stderr,"malloc failed - interpolation/all_send_buffers\n");exit(0);}
-                      memset(all_send_buffers,0,numFineBoxesRemote*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
     //printf("level=%d, rank=%2d, send_buffers=%6d\n",level,all_grids->my_rank,numFineBoxesRemote*elementSize*sizeof(double));
 
     // for each neighbor, construct the pack list and allocate the MPI send buffer... 
     for(neighbor=0;neighbor<numFineRanks;neighbor++){
       int fineBox;
       int offset = 0;
-      all_grids->levels[level]->interpolation.send_buffers[neighbor] = all_send_buffers;
+      int malloc_size = 0;
+      for(fineBox=0;fineBox<numFineBoxes;fineBox++)if(fineBoxes[fineBox].recvRank==fineRanks[neighbor]){malloc_size+=elementSize;}
+             all_grids->levels[level]->interpolation.send_buffers[neighbor] = (double*)um_malloc(malloc_size*sizeof(double),UM_ACCESS_BOTH);
+          if(all_grids->levels[level]->interpolation.send_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - interpolation/all_send_buffers\n");exit(0);}
+      memset(all_grids->levels[level]->interpolation.send_buffers[neighbor],0,malloc_size*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
       for(fineBox=0;fineBox<numFineBoxes;fineBox++)if(fineBoxes[fineBox].recvRank==fineRanks[neighbor]){
         // pack the MPI send buffer...
         append_block_to_list(&(all_grids->levels[level]->interpolation.blocks[0]),&(all_grids->levels[level]->interpolation.allocated_blocks[0]),&(all_grids->levels[level]->interpolation.num_blocks[0]),
@@ -280,7 +280,6 @@ void build_interpolation(mg_type *all_grids){
       }
       all_grids->levels[level]->interpolation.send_ranks[neighbor] = fineRanks[neighbor];
       all_grids->levels[level]->interpolation.send_sizes[neighbor] = offset;
-      all_send_buffers+=offset;
     } // neighbor
     {
       int fineBox;
@@ -372,17 +371,17 @@ void build_interpolation(mg_type *all_grids){
     }
 
     int elementSize = all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim*all_grids->levels[level]->box_dim;
-    double * all_recv_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double)); 
-          if(numCoarseBoxes*elementSize>0)
-          if(all_recv_buffers==NULL){fprintf(stderr,"malloc failed - interpolation/all_recv_buffers\n");exit(0);}
-                      memset(all_recv_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
     //printf("level=%d, rank=%2d, recv_buffers=%6d\n",level,all_grids->my_rank,numCoarseBoxes*elementSize*sizeof(double));
 
     // for each neighbor, construct the unpack list and allocate the MPI recv buffer... 
     for(neighbor=0;neighbor<numCoarseRanks;neighbor++){
       int coarseBox;
       int offset = 0;
-      all_grids->levels[level]->interpolation.recv_buffers[neighbor] = all_recv_buffers;
+      int malloc_size = 0;
+      for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].sendRank==coarseRanks[neighbor]){malloc_size+=elementSize;}
+             all_grids->levels[level]->interpolation.recv_buffers[neighbor] = (double*)um_malloc(malloc_size*sizeof(double),UM_ACCESS_BOTH); 
+          if(all_grids->levels[level]->interpolation.recv_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - interpolation/all_recv_buffers\n");exit(0);}
+      memset(all_grids->levels[level]->interpolation.recv_buffers[neighbor],0,malloc_size*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
       for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].sendRank==coarseRanks[neighbor]){
         // unpack MPI recv buffer...
         append_block_to_list(&(all_grids->levels[level]->interpolation.blocks[2]),&(all_grids->levels[level]->interpolation.allocated_blocks[2]),&(all_grids->levels[level]->interpolation.num_blocks[2]),
@@ -415,7 +414,6 @@ void build_interpolation(mg_type *all_grids){
       }
       all_grids->levels[level]->interpolation.recv_ranks[neighbor] = coarseRanks[neighbor];
       all_grids->levels[level]->interpolation.recv_sizes[neighbor] = offset;
-      all_recv_buffers+=offset;
     } // neighbor
 
     // free temporary storage...
@@ -556,16 +554,15 @@ void build_restriction(mg_type *all_grids, int restrictionType){
     }
     elementSize = restrict_dim_i*restrict_dim_j*restrict_dim_k;
    
-    double * all_send_buffers = (double*)malloc(numCoarseBoxes*elementSize*sizeof(double));
-          if(numCoarseBoxes*elementSize>0)
-          if(all_send_buffers==NULL){fprintf(stderr,"malloc failed - restriction/all_send_buffers\n");exit(0);}
-                      memset(all_send_buffers,0,numCoarseBoxes*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
-
     // for each neighbor, construct the pack list and allocate the MPI send buffer... 
     for(neighbor=0;neighbor<numCoarseRanks;neighbor++){
       int coarseBox;
       int offset = 0;
-      all_grids->levels[level]->restriction[restrictionType].send_buffers[neighbor] = all_send_buffers;
+      int malloc_size=0;
+      for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].recvRank==coarseRanks[neighbor]){malloc_size+=elementSize;}
+             all_grids->levels[level]->restriction[restrictionType].send_buffers[neighbor] = (double*)um_malloc(malloc_size*sizeof(double),UM_ACCESS_BOTH);
+          if(all_grids->levels[level]->restriction[restrictionType].send_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - restriction/all_send_buffers\n");exit(0);}
+      memset(all_grids->levels[level]->restriction[restrictionType].send_buffers[neighbor],0,malloc_size*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
       for(coarseBox=0;coarseBox<numCoarseBoxes;coarseBox++)if(coarseBoxes[coarseBox].recvRank==coarseRanks[neighbor]){
         // restrict to MPI send buffer...
         append_block_to_list( &(all_grids->levels[level]->restriction[restrictionType].blocks[0]),
@@ -600,7 +597,6 @@ void build_restriction(mg_type *all_grids, int restrictionType){
       }
       all_grids->levels[level]->restriction[restrictionType].send_ranks[neighbor] = coarseRanks[neighbor];
       all_grids->levels[level]->restriction[restrictionType].send_sizes[neighbor] = offset;
-      all_send_buffers+=offset;
     }
     // for construct the local restriction list... 
     {
@@ -725,17 +721,17 @@ void build_restriction(mg_type *all_grids, int restrictionType){
     }
     elementSize = restrict_dim_i*restrict_dim_j*restrict_dim_k;
 
-    double * all_recv_buffers = (double*)malloc(numFineBoxesRemote*elementSize*sizeof(double));
-          if(numFineBoxesRemote*elementSize>0)
-          if(all_recv_buffers==NULL){fprintf(stderr,"malloc failed - restriction/all_recv_buffers\n");exit(0);}
-                      memset(all_recv_buffers,0,numFineBoxesRemote*elementSize*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
     //printf("level=%d, rank=%2d, recv_buffers=%6d\n",level,all_grids->my_rank,numFineBoxesRemote*elementSize*sizeof(double));
 
     // for each neighbor, construct the unpack list and allocate the MPI recv buffer... 
     for(neighbor=0;neighbor<numFineRanks;neighbor++){
       int fineBox;
       int offset = 0;
-      all_grids->levels[level]->restriction[restrictionType].recv_buffers[neighbor] = all_recv_buffers;
+      int malloc_size=0;
+      for(fineBox=0;fineBox<numFineBoxesRemote;fineBox++)if(fineBoxes[fineBox].sendRank==fineRanks[neighbor]){malloc_size+=elementSize;}
+             all_grids->levels[level]->restriction[restrictionType].recv_buffers[neighbor] = (double*)um_malloc(malloc_size*sizeof(double),UM_ACCESS_BOTH);
+          if(all_grids->levels[level]->restriction[restrictionType].recv_buffers[neighbor]==NULL){fprintf(stderr,"malloc failed - restriction/all_recv_buffers\n");exit(0);}
+      memset(all_grids->levels[level]->restriction[restrictionType].recv_buffers[neighbor],0,malloc_size*sizeof(double)); // DO NOT DELETE... you must initialize to 0 to avoid getting something like 0.0*NaN and corrupting the solve
       for(fineBox=0;fineBox<numFineBoxesRemote;fineBox++)if(fineBoxes[fineBox].sendRank==fineRanks[neighbor]){
         // unpack MPI recv buffer...
         append_block_to_list( &(all_grids->levels[level]->restriction[restrictionType].blocks[2]),
@@ -770,7 +766,6 @@ void build_restriction(mg_type *all_grids, int restrictionType){
       }
       all_grids->levels[level]->restriction[restrictionType].recv_ranks[neighbor] = fineRanks[neighbor];
       all_grids->levels[level]->restriction[restrictionType].recv_sizes[neighbor] = offset;
-      all_recv_buffers+=offset;
     } // neighbor
 
     // free temporary storage...
@@ -980,7 +975,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (all_grids->levels[level]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero==1)) )all_grids->levels[level]->must_subtract_mean = 1;
   }
 
-  
+  cudaDeviceSynchronize(); 
   all_grids->cycles.MGBuild += (uint64_t)(CycleTime()-_timeStartMGBuild);
 }
 
@@ -1036,11 +1031,6 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
        smooth(all_grids->levels[level  ],e_id,R_id,a,b);
      residual(all_grids->levels[level  ],VECTOR_TEMP,e_id,R_id,a,b);
   restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],VECTOR_TEMP,RESTRICT_CELL);
-
-  // sync device if the current level is on GPU and the next level will be on CPU
-  if (all_grids->levels[level]->use_cuda && !all_grids->levels[level+1]->use_cuda)
-    cudaDeviceSynchronize();
-
   zero_vector(all_grids->levels[level+1],e_id);
   all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
 
@@ -1137,6 +1127,7 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
 //------------------------------------------------------------------------------------------------------------------------------
 void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
   all_grids->MGSolves_performed++;
+  cudaDeviceSynchronize();
   if(!all_grids->levels[onLevel]->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef UNLIMIT_FMG_VCYCLES
@@ -1154,7 +1145,7 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   #elif USE_MPI
   double FMG_Start_Time = MPI_Wtime();
   #endif
-  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"FMGSolve... ");}
+  if(all_grids->levels[onLevel]->my_rank==0){fprintf(stdout,"FMGSolve... ");fflush(stdout);}
   uint64_t _timeStartMGSolve = CycleTime();
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
@@ -1178,9 +1169,6 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
   for(level=onLevel;level<(all_grids->num_levels-1);level++){
     uint64_t _LevelStart = CycleTime();
     restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],R_id,RESTRICT_CELL);
-    // sync device if the current level is on GPU and the next level will be on CPU
-    if (all_grids->levels[level]->use_cuda && !all_grids->levels[level+1]->use_cuda)
-      cudaDeviceSynchronize();
     all_grids->levels[level]->cycles.Total += (uint64_t)(CycleTime()-_LevelStart);
   }
 
@@ -1234,8 +1222,8 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
       double rel = 0.0;
       if(rtol>0)rel = norm_of_residual/norm_of_F;
            else rel = norm_of_residual/norm_of_DinvF;
-      if(  v>=0){fprintf(stdout,"\n            v-cycle=%2d  norm=%1.15e  rel=%1.15e  ",v+1,norm_of_residual,rel);}
-            else{fprintf(stdout,              "f-cycle     norm=%1.15e  rel=%1.15e  ",norm_of_residual,rel);}
+      if(  v>=0){fprintf(stdout,"\n            v-cycle=%2d  norm=%1.15e  rel=%1.15e  ",v+1,norm_of_residual,rel);fflush(stdout);}
+            else{fprintf(stdout,              "f-cycle     norm=%1.15e  rel=%1.15e  ",norm_of_residual,rel);fflush(stdout);}
     }
     if(norm_of_residual/norm_of_F < rtol)break;
     if(norm_of_residual           < dtol)break;

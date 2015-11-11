@@ -230,7 +230,7 @@ void interpolation_v2(level_type * level_f, int id_f, double prescale_f, level_t
   // pack MPI send buffers...
   if(level_c->interpolation.num_blocks[0]>0){
     _timeStart = CycleTime();
-    if(level_c->use_cuda) {
+    if(level_f->use_cuda) {
       cuda_interpolation_v2(*level_f,id_f,0.0,*level_c,id_c,level_c->interpolation,0);
       cudaDeviceSynchronize();
     }

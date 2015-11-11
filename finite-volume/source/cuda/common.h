@@ -34,8 +34,8 @@ void cuda_residual(level_type d_level, int res_id, int x_id, int rhs_id, double 
 
 void cuda_restriction(level_type d_level_c, int id_c, level_type d_level_f, int id_f, communicator_type restriction, int restrictionType, int block_type);
 
-void cuda_interpolation_pc(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type);
-void cuda_interpolation_pl(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type);
+void cuda_interpolation_p0(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type);
+void cuda_interpolation_p1(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type);
 void cuda_interpolation_v2(level_type level_f, int id_f, double prescale_f, level_type level_c, int id_c, communicator_type interpolation, int block_type);
 
 void cuda_apply_BCs_v1(level_type level, int x_id, int shape);

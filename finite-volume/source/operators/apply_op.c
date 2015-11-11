@@ -15,6 +15,8 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){
   uint64_t _timeStart = CycleTime();
   int block;
 
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... wait for any other GPU operations on this level to complete
+
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
