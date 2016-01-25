@@ -1,4 +1,7 @@
-export CUDA_VISIBLE_DEVICES="0,1,2,3"
+# alternatively set CUDA_VISIBLE_DEVICES appropriately, see README for details
+export CUDA_MANAGED_FORCE_DEVICE_ALLOC=1
+
+# number of CPU threads executing coarse levels
 export OMP_NUM_THREADS=4
 
 # Single

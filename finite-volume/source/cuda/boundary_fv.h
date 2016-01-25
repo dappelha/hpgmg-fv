@@ -26,45 +26,25 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Divide CUDA block into groups of threads (e.g. quads), each operating on an individual b.c. block.
-#define APPLY_BCS_V1_BLOCK_SIZE      128                                                        // number of threads per block
-#define APPLY_BCS_V1_GROUP_SIZE      16                                                         // number of threads per group
-#define APPLY_BCS_V1_NUM_GROUPS      (APPLY_BCS_V1_BLOCK_SIZE / APPLY_BCS_V1_GROUP_SIZE)	// number of groups per block
-
-#define APPLY_BCS_V2_BLOCK_SIZE		128							// number of threads per block
-#define APPLY_BCS_V2_GROUP_SIZE      	16							// number of threads per group
-#define APPLY_BCS_V2_NUM_GROUPS      	(APPLY_BCS_V2_BLOCK_SIZE / APPLY_BCS_V2_GROUP_SIZE)	// number of groups per block
+// Divide thread block into batches of threads (e.g. quads), each batch operates on one HPGMG tile/block
+#define BLOCK_SIZE      128     // number of threads per thread block
+#define NUM_BATCH       8       // mimber of batches per thread block
+#undef  X
+#define X(i)  __ldg(&x[i])
 
 __constant__ int   faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
 __constant__ int   edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
 __constant__ int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
-
+//------------------------------------------------------------------------------------------------------------------------------
+template <int log_dim, int num_batch, int batch_size>
 __global__ void apply_BCs_v1_kernel(level_type level, int x_id, int shape){
-  // For cell-centered, we need to fill in the ghost zones to apply any BC's
-  // This code does a simple piecewise linear interpolation for homogeneous dirichlet (0 on boundary)
-  // Nominally, this is first performed across faces, then to edges, then to corners.
-  // In this implementation, these three steps are fused
-  //
-  //   . . . . . . . . . .        . . . . . . . . . .
-  //   .       .       .          .       .       .
-  //   .   ?   .   ?   .          .+x(0,0).-x(0,0).
-  //   .       .       .          .       .       .
-  //   . . . . +---0---+--        . . . . +-------+--
-  //   .       |       |          .       |       |
-  //   .   ?   0 x(0,0)|          .-x(0,0)| x(0,0)|
-  //   .       |       |          .       |       |
-  //   . . . . +-------+--        . . . . +-------+--
-  //   .       |       |          .       |       |
-  //
-  //
+  // thread exit condition
+  int batchid = blockIdx.x*num_batch + threadIdx.x/batch_size;
+  if(batchid >= level.boundary_condition.num_blocks[shape]) return;
 
-  int bid = blockIdx.x*APPLY_BCS_V1_NUM_GROUPS + threadIdx.x/APPLY_BCS_V1_GROUP_SIZE;
-  //if(blockIdx.x<2){printf("%d\t%d\t%d\n",blockIdx.x,threadIdx.x,bid);}
-  if(bid >= level.boundary_condition.num_blocks[shape]) return;
-
-  // load current block
-  blockCopy_type block = level.boundary_condition.blocks[shape][bid];
+  // one CUDA thread block operates on 'batch_size' HPGMG tiles/blocks
+  blockCopy_type block = level.boundary_condition.blocks[shape][batchid];
 
   double scale = 1.0;
   if(  faces[block.subtype])scale=-1.0;
@@ -92,47 +72,24 @@ __global__ void apply_BCs_v1_kernel(level_type level, int x_id, int shape){
   const int dk = (((normal / 9)  )-1);
   const int stride = di + dj*jStride + dk*kStride;
 
-/*
-  if(dim_i==1){
-    for(int gid=threadIdx.x%APPLY_BCS_V1_GROUP_SIZE; gid<dim_j*dim_k; gid+=APPLY_BCS_V1_GROUP_SIZE){
-      k=gid/dim_j;
-      j=gid%dim_j;
-      int ijk = (  ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-      x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
-    }
-  }else if(dim_j==1){
-    for(int gid=threadIdx.x%APPLY_BCS_V1_GROUP_SIZE; gid<dim_i*dim_k; gid+=APPLY_BCS_V1_GROUP_SIZE){
-      k=gid/dim_i;
-      i=gid%dim_i;
-      int ijk = (i+ilo) + (  jlo)*jStride + (k+klo)*kStride;
-      x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
-    }
-  }else if(dim_k==1){
-    for(int gid=threadIdx.x%APPLY_BCS_V1_GROUP_SIZE; gid<dim_i*dim_j; gid+=APPLY_BCS_V1_GROUP_SIZE){
-      j=gid/dim_i;
-      i=gid%dim_i;
-      int ijk = (i+ilo) + (j+jlo)*jStride + (  klo)*kStride;
-      x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
-    }
-  }else{
-*/
-    for(int gid=threadIdx.x%APPLY_BCS_V1_GROUP_SIZE; gid<dim_i*dim_j*dim_k; gid+=APPLY_BCS_V1_GROUP_SIZE){
-      k=(gid/dim_i)/dim_j;
-      j=(gid/dim_i)%dim_j;
-      i=gid%dim_i;
-      int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-      x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
-      //x[ijk] = scale * __ldg(x + ijk + stride);
-    }
-  //}
+  for(int gid=threadIdx.x%batch_size; gid<dim_i*dim_j*dim_k; gid+=batch_size){
+    k=(gid/dim_i)/dim_j;
+    j=(gid/dim_i)%dim_j;
+    i=gid%dim_i;
+    int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+    x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
+  }
 }
 
-
+//------------------------------------------------------------------------------------------------------------------------------
+template <int num_batch, int batch_size>
 __global__ void zero_ghost_region_kernel(level_type level, int x_id, int shape){
-  if(blockIdx.x >= level.boundary_condition.num_blocks[shape]) return;
+  // thread exit conditions
+  int batchid = blockIdx.x*num_batch + threadIdx.x/batch_size;
+  if(batchid >= level.boundary_condition.num_blocks[shape]) return;
 
-  // load current block
-  blockCopy_type block = level.boundary_condition.blocks[shape][blockIdx.x];
+  // one CUDA thread block operates on 'batch_size' HPGMG tiles/blocks
+  blockCopy_type block = level.boundary_condition.blocks[shape][batchid];
 
   const int       box = block.read.box;
   const int     dim_i = block.dim.i;
@@ -148,32 +105,23 @@ __global__ void zero_ghost_region_kernel(level_type level, int x_id, int shape){
   double * __restrict__  xn = level.my_boxes[box].vectors[x_id] + level.my_boxes[box].ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
 
   // zero out entire ghost region when not all points will be updated...
-  for(int gid=threadIdx.x; gid<dim_i*dim_j*dim_k; gid+=blockDim.x){
+  for(int gid=threadIdx.x%batch_size; gid<dim_i*dim_j*dim_k; gid+=batch_size){
     int k=(gid/dim_i)/dim_j;
     int j=(gid/dim_i)%dim_j;
     int i=gid%dim_i;
-//  for(k=0;k<dim_k;k++){
-//  for(j=0;j<dim_j;j++){
-//  for(i=0;i<dim_i;i++){
     int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
     xn[ijk] = 0.0;
-//  }}}
   }
 }
 
-
+template <int log_dim, int num_batch, int batch_size>
 __global__ void apply_BCs_v2_kernel(level_type level, int x_id, int shape){
-  // For cell-centered, we need to fill in the ghost zones to apply any BC's
-  // This code does a simple quadratic interpolation for homogeneous dirichlet (0 on boundary)
-  // Nominally, this is first performed across faces, then to edges, then to corners.  
-  // In this implementation, these three steps are fused
+  // thread exit conditon
+  int batchid = blockIdx.x*num_batch + threadIdx.x/batch_size;
+  if(batchid >= level.boundary_condition.num_blocks[shape]) return;
 
-//  if(blockIdx.x >= level.boundary_condition.num_blocks[shape]) return;
-  int bid = blockIdx.x*APPLY_BCS_V2_NUM_GROUPS + threadIdx.x/APPLY_BCS_V2_GROUP_SIZE;
-  if(bid >= level.boundary_condition.num_blocks[shape]) return;
-
-  // load current block
-  blockCopy_type block = level.boundary_condition.blocks[shape][bid];
+  // one CUDA thread block operates on 'batch_size' HPGMG tiles/blocks
+  blockCopy_type block = level.boundary_condition.blocks[shape][batchid];
 
   const int box_dim    = level.box_dim;
 
@@ -191,17 +139,6 @@ __global__ void apply_BCs_v2_kernel(level_type level, int x_id, int shape){
   const int kStride = level.my_boxes[box].kStride;
   double * __restrict__  x  = level.my_boxes[box].vectors[x_id] + level.my_boxes[box].ghosts*(1+jStride+kStride);
   double * __restrict__  xn = level.my_boxes[box].vectors[x_id] + level.my_boxes[box].ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
-
-  /*
-  // zero out entire ghost region when not all points will be updated...
-  if(box_ghosts>1){
-  for(k=0;k<dim_k;k++){
-  for(j=0;j<dim_j;j++){
-  for(i=0;i<dim_i;i++){
-    int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-    xn[ijk] = 0.0;
-  }}}}
-  */
 
   // apply the appropriate BC subtype (face, edge, corner)...
   if(faces[subtype]){
@@ -224,16 +161,12 @@ __global__ void apply_BCs_v2_kernel(level_type level, int x_id, int shape){
       case 22:rlo=ilo;dim_r=dim_i;rStride=      1;slo=jlo;dim_s=dim_j;sStride=jStride;t=box_dim;tStride=kStride;dt=-tStride;break; // ij face, high k
     }
 
-    //if(threadIdx.x==0) printf("%d:\t(%d,%d)\t%d\t%d\t%d\n",blockIdx.x,dim_r,dim_i,faces[subtype],edges[subtype],corners[subtype]);
     // FIX... optimize for rStride==1 (unit-stride)
-    for(int gid=threadIdx.x%APPLY_BCS_V2_GROUP_SIZE; gid<dim_r*dim_s; gid+=APPLY_BCS_V2_GROUP_SIZE){
+    for(int gid=threadIdx.x%batch_size; gid<dim_r*dim_s; gid+=batch_size){
       s=gid/dim_r;
       r=gid%dim_r;
-//    for(s=0;s<dim_s;s++){
-//    for(r=0;r<dim_r;r++){
       int ijk = (r+rlo)*rStride + (s+slo)*sStride + (t)*tStride;
-      xn[ijk] = -2.5*x[ijk+dt] + 0.5*x[ijk+dt+dt];
-//    }}
+      xn[ijk] = -2.5*X(ijk+dt) + 0.5*X(ijk+dt+dt);
     }
   }else
   if(edges[subtype]){
@@ -267,15 +200,13 @@ __global__ void apply_BCs_v2_kernel(level_type level, int x_id, int shape){
       case 25:rlo=ilo;dim_r=dim_i;rStride=      1;s=box_dim;sStride=jStride;t=box_dim;tStride=kStride;ds=-sStride;dt=-tStride;break; // i-edge, high j, high k
     }
     // FIX... optimize for rStride==1 (unit-stride)
-//    if(threadIdx.x >= dim_r) return;
-    for(int gid=threadIdx.x%APPLY_BCS_V2_GROUP_SIZE; gid<dim_r; gid+=APPLY_BCS_V2_GROUP_SIZE){
+    for(int gid=threadIdx.x%batch_size; gid<dim_r; gid+=batch_size){
       r=gid;
-//    for(r=0;r<dim_r;r++){
       int ijk = (r+rlo)*rStride + (s)*sStride + (t)*tStride;
-      xn[ijk] =   6.25*x[ijk+  ds+  dt] 
-                - 1.25*x[ijk+2*ds+  dt]
-                - 1.25*x[ijk+  ds+2*dt]
-                + 0.25*x[ijk+2*ds+2*dt];
+      xn[ijk] =   6.25*X(ijk+  ds+  dt) 
+                - 1.25*X(ijk+2*ds+  dt)
+                - 1.25*X(ijk+  ds+2*dt)
+                + 0.25*X(ijk+2*ds+2*dt);
     }
   }else
   if(corners[subtype]){
@@ -308,93 +239,46 @@ __global__ void apply_BCs_v2_kernel(level_type level, int x_id, int shape){
       case 24:i=     -1;j=box_dim;k=box_dim;di= 1;dj=-jStride;dk=-kStride;break; //  low i, high j, high k
       case 26:i=box_dim;j=box_dim;k=box_dim;di=-1;dj=-jStride;dk=-kStride;break; // high i, high j, high k
     }
-    if(threadIdx.x%APPLY_BCS_V2_GROUP_SIZE>0) return;
+    if(threadIdx.x%batch_size>0) return;
     int ijk = (i) + (j)*jStride + (k)*kStride;
-    xn[ijk] =  -15.625*x[ijk+  di+  dj+  dk] 
-               + 3.125*x[ijk+2*di+  dj+  dk] 
-               + 3.125*x[ijk+  di+2*dj+  dk] 
-               + 3.125*x[ijk+  di+  dj+2*dk] 
-               - 0.625*x[ijk+2*di+2*dj+  dk] 
-               - 0.625*x[ijk+  di+2*dj+2*dk] 
-               - 0.625*x[ijk+2*di+  dj+2*dk] 
-               + 0.125*x[ijk+2*di+2*dj+2*dk];
+    xn[ijk] =  -15.625*X(ijk+  di+  dj+  dk) 
+               + 3.125*X(ijk+2*di+  dj+  dk) 
+               + 3.125*X(ijk+  di+2*dj+  dk) 
+               + 3.125*X(ijk+  di+  dj+2*dk) 
+               - 0.625*X(ijk+2*di+2*dj+  dk) 
+               - 0.625*X(ijk+  di+2*dj+2*dk) 
+               - 0.625*X(ijk+2*di+  dj+2*dk) 
+               + 0.125*X(ijk+2*di+2*dj+2*dk);
   }
 }
 
-extern "C"
-void cuda_apply_BCs_v1(level_type level, int x_id, int shape)
-{
-  int block = APPLY_BCS_V1_BLOCK_SIZE;
-  int grid = level.boundary_condition.num_blocks[shape];
-  if (grid <= 0) return;
-
-  apply_BCs_v1_kernel<<<grid, block>>>(level, x_id, shape);
-}
-
-extern "C"
-void cuda_apply_BCs_v2(level_type level, int x_id, int shape)
-{
-  int block = APPLY_BCS_V2_BLOCK_SIZE;
-  int grid = (level.boundary_condition.num_blocks[shape]+APPLY_BCS_V2_NUM_GROUPS-1)/APPLY_BCS_V2_NUM_GROUPS;
-  if (grid <= 0) return;
-
-  if(level.box_ghosts>1){
-    zero_ghost_region_kernel<<<grid, block>>>(level, x_id, shape);
-  }
-
-  apply_BCs_v2_kernel<<<grid, block>>>(level, x_id, shape);
-}
-
-/*
 //------------------------------------------------------------------------------------------------------------------------------
-void apply_BCs_v4(level_type * level, int x_id, int shape){
-  // For cell-centered, we need to fill in the ghost zones to apply any BC's
-  // This code does a simple quartic interpolation for homogeneous dirichlet (0 on boundary)
-  // Nominally, this is first performed across faces, then to edges, then to corners.  
-  // In this implementation, these three steps are fused
-  const int box_dim    = level->box_dim;
-  const int box_ghosts = level->box_ghosts;
-  if(shape>=STENCIL_MAX_SHAPES)shape=STENCIL_SHAPE_BOX;  // shape must be < STENCIL_MAX_SHAPES in order to safely index into boundary_condition.blocks[]
-  if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
-  if(box_ghosts<2){fprintf(stderr,"called quartic BC's with only 1 ghost zone!!!\n");exit(0);}
-//if(box_dim   <4){fprintf(stderr,"called quartic BC's with boxes < 4^3 \n");exit(0);}
-  if(box_dim   <4){apply_BCs_v2(level,x_id,shape);return;} // FIX... is it safe to drop order on the boundary on coarse grids ??
+template <int log_dim, int num_batch, int batch_size>
+__global__ void apply_BCs_v4_kernel(level_type level, int x_id, int shape){
+  // thread exit condition
+  int bid = blockIdx.x*num_batch + threadIdx.x/batch_size;
+  if(bid >= level.boundary_condition.num_blocks[shape]) return;
 
-  const int   faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
-  const int   edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
-  const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
+  // one CUDA thread block operates on 'batch_size' HPGMG tiles/blocks
+  blockCopy_type block = level.boundary_condition.blocks[shape][bid];
 
-  int buffer;
-  uint64_t _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
-  for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
-    int i,j,k;
-    const int       box = level->boundary_condition.blocks[shape][buffer].read.box; 
-    const int     dim_i = level->boundary_condition.blocks[shape][buffer].dim.i;
-    const int     dim_j = level->boundary_condition.blocks[shape][buffer].dim.j;
-    const int     dim_k = level->boundary_condition.blocks[shape][buffer].dim.k;
-    const int       ilo = level->boundary_condition.blocks[shape][buffer].read.i;
-    const int       jlo = level->boundary_condition.blocks[shape][buffer].read.j;
-    const int       klo = level->boundary_condition.blocks[shape][buffer].read.k;
-    const int   subtype = level->boundary_condition.blocks[shape][buffer].subtype;
-  //const int    normal = 26-subtype;
+  const int box_dim   = level.box_dim;
+  const int       box = block.read.box; 
+  const int     dim_i = block.dim.i;
+  const int     dim_j = block.dim.j;
+  const int     dim_k = block.dim.k;
+  const int       ilo = block.read.i;
+  const int       jlo = block.read.j;
+  const int       klo = block.read.k;
+  const int   subtype = block.subtype;
  
-    // hard code for box to box BC's 
-    const int jStride = level->my_boxes[box].jStride;
-    const int kStride = level->my_boxes[box].kStride;
-    double * __restrict__  x  = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride);
-    double * __restrict__  xn = level->my_boxes[box].vectors[x_id] + level->my_boxes[box].ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
+  // hard code for box to box BC's 
+  const int jStride = level.my_boxes[box].jStride;
+  const int kStride = level.my_boxes[box].kStride;
+  double * __restrict__  x  = level.my_boxes[box].vectors[x_id] + level.my_boxes[box].ghosts*(1+jStride+kStride);
+  double * __restrict__  xn = level.my_boxes[box].vectors[x_id] + level.my_boxes[box].ghosts*(1+jStride+kStride); // physically the same, but use different pointers for read/write
 
-    double OneTwelfth = 1.0/12.0;
-
-    // zero out entire ghost region when not all points will be updated...
-    if(box_ghosts>2){
-    for(k=0;k<dim_k;k++){
-    for(j=0;j<dim_j;j++){
-    for(i=0;i<dim_i;i++){
-      int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-      xn[ijk] = 0.0;
-    }}}}
+  double OneTwelfth = 1.0/12.0;
 
     // apply the appropriate BC subtype (face, edge, corner)...
     if(faces[subtype]){
@@ -417,13 +301,14 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
         case 22:rlo=ilo;dim_r=dim_i;rStride=      1;slo=jlo;dim_s=dim_j;sStride=jStride;t=box_dim;tStride=kStride;dt=-tStride;break; // ij face, high k
       }
       // FIX... optimize for rStride==1 (unit-stride)
-      for(s=0;s<dim_s;s++){
-      for(r=0;r<dim_r;r++){
+      for(int gid=threadIdx.x%batch_size; gid<dim_r*dim_s; gid+=batch_size){
+        s=gid/dim_r;
+        r=gid%dim_r;
         int ijk = (r+rlo)*rStride + (s+slo)*sStride + (t)*tStride;
-        double x1=x[ijk+dt], x2=x[ijk+2*dt], x3=x[ijk+3*dt], x4=x[ijk+4*dt];
+        double x1=X(ijk+dt), x2=X(ijk+2*dt), x3=X(ijk+3*dt), x4=X(ijk+4*dt);
         xn[ijk   ] = OneTwelfth*(  -77.0*x1 +  43.0*x2 -  17.0*x3 +  3.0*x4 );
         xn[ijk-dt] = OneTwelfth*( -505.0*x1 + 335.0*x2 - 145.0*x3 + 27.0*x4 );
-      }}
+      }
     }else
     if(edges[subtype]){
       //
@@ -478,12 +363,13 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
         case 25:rlo=ilo;dim_r=dim_i;rStride=      1;s=box_dim;sStride=jStride;t=box_dim;tStride=kStride;ds=-sStride;dt=-tStride;break; // i-edge, high j, high k
       }
       // FIX... optimize for rStride==1 (unit-stride)
-      for(r=0;r<dim_r;r++){
+      for(int gid=threadIdx.x%batch_size; gid<dim_r; gid+=batch_size){
+	r=gid;
         int ijk = (r+rlo)*rStride + (s)*sStride + (t)*tStride;
-        double x11 = x[ijk+  ds+  dt], x21 = x[ijk+2*ds+  dt], x31 = x[ijk+3*ds+  dt], x41 = x[ijk+4*ds+  dt];
-        double x12 = x[ijk+  ds+2*dt], x22 = x[ijk+2*ds+2*dt], x32 = x[ijk+3*ds+2*dt], x42 = x[ijk+4*ds+2*dt];
-        double x13 = x[ijk+  ds+3*dt], x23 = x[ijk+2*ds+3*dt], x33 = x[ijk+3*ds+3*dt], x43 = x[ijk+4*ds+3*dt];
-        double x14 = x[ijk+  ds+4*dt], x24 = x[ijk+2*ds+4*dt], x34 = x[ijk+3*ds+4*dt], x44 = x[ijk+4*ds+4*dt];
+        double x11 = X(ijk+  ds+  dt), x21 = X(ijk+2*ds+  dt), x31 = X(ijk+3*ds+  dt), x41 = X(ijk+4*ds+  dt);
+        double x12 = X(ijk+  ds+2*dt), x22 = X(ijk+2*ds+2*dt), x32 = X(ijk+3*ds+2*dt), x42 = X(ijk+4*ds+2*dt);
+        double x13 = X(ijk+  ds+3*dt), x23 = X(ijk+2*ds+3*dt), x33 = X(ijk+3*ds+3*dt), x43 = X(ijk+4*ds+3*dt);
+        double x14 = X(ijk+  ds+4*dt), x24 = X(ijk+2*ds+4*dt), x34 = X(ijk+3*ds+4*dt), x44 = X(ijk+4*ds+4*dt);
             double n1 = OneTwelfth*(  -77.0*x11 +  43.0*x21 -  17.0*x31 +  3.0*x41 );
             double n2 = OneTwelfth*(  -77.0*x12 +  43.0*x22 -  17.0*x32 +  3.0*x42 );
             double n3 = OneTwelfth*(  -77.0*x13 +  43.0*x23 -  17.0*x33 +  3.0*x43 );
@@ -540,26 +426,27 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
         case 24:i=     -1;j=box_dim;k=box_dim;di= 1;dj=-jStride;dk=-kStride;break; //  low i, high j, high k
         case 26:i=box_dim;j=box_dim;k=box_dim;di=-1;dj=-jStride;dk=-kStride;break; // high i, high j, high k
       }
+      if(threadIdx.x%batch_size>0) return;
       int ijk = (i) + (j)*jStride + (k)*kStride;
-      double x144 = x[ijk+  di+4*dj+4*dk];double x244 = x[ijk+2*di+4*dj+4*dk];double x344 = x[ijk+3*di+4*dj+4*dk];double x444 = x[ijk+4*di+4*dj+4*dk];
-      double x134 = x[ijk+  di+3*dj+4*dk];double x234 = x[ijk+2*di+3*dj+4*dk];double x334 = x[ijk+3*di+3*dj+4*dk];double x434 = x[ijk+4*di+3*dj+4*dk];
-      double x124 = x[ijk+  di+2*dj+4*dk];double x224 = x[ijk+2*di+2*dj+4*dk];double x324 = x[ijk+3*di+2*dj+4*dk];double x424 = x[ijk+4*di+2*dj+4*dk];
-      double x114 = x[ijk+  di+  dj+4*dk];double x214 = x[ijk+2*di+  dj+4*dk];double x314 = x[ijk+3*di+  dj+4*dk];double x414 = x[ijk+4*di+  dj+4*dk];
+      double x144 = X(ijk+  di+4*dj+4*dk);double x244 = X(ijk+2*di+4*dj+4*dk);double x344 = X(ijk+3*di+4*dj+4*dk);double x444 = X(ijk+4*di+4*dj+4*dk);
+      double x134 = X(ijk+  di+3*dj+4*dk);double x234 = X(ijk+2*di+3*dj+4*dk);double x334 = X(ijk+3*di+3*dj+4*dk);double x434 = X(ijk+4*di+3*dj+4*dk);
+      double x124 = X(ijk+  di+2*dj+4*dk);double x224 = X(ijk+2*di+2*dj+4*dk);double x324 = X(ijk+3*di+2*dj+4*dk);double x424 = X(ijk+4*di+2*dj+4*dk);
+      double x114 = X(ijk+  di+  dj+4*dk);double x214 = X(ijk+2*di+  dj+4*dk);double x314 = X(ijk+3*di+  dj+4*dk);double x414 = X(ijk+4*di+  dj+4*dk);
 
-      double x143 = x[ijk+  di+4*dj+3*dk];double x243 = x[ijk+2*di+4*dj+3*dk];double x343 = x[ijk+3*di+4*dj+3*dk];double x443 = x[ijk+4*di+4*dj+3*dk];
-      double x133 = x[ijk+  di+3*dj+3*dk];double x233 = x[ijk+2*di+3*dj+3*dk];double x333 = x[ijk+3*di+3*dj+3*dk];double x433 = x[ijk+4*di+3*dj+3*dk];
-      double x123 = x[ijk+  di+2*dj+3*dk];double x223 = x[ijk+2*di+2*dj+3*dk];double x323 = x[ijk+3*di+2*dj+3*dk];double x423 = x[ijk+4*di+2*dj+3*dk];
-      double x113 = x[ijk+  di+  dj+3*dk];double x213 = x[ijk+2*di+  dj+3*dk];double x313 = x[ijk+3*di+  dj+3*dk];double x413 = x[ijk+4*di+  dj+3*dk];
+      double x143 = X(ijk+  di+4*dj+3*dk);double x243 = X(ijk+2*di+4*dj+3*dk);double x343 = X(ijk+3*di+4*dj+3*dk);double x443 = X(ijk+4*di+4*dj+3*dk);
+      double x133 = X(ijk+  di+3*dj+3*dk);double x233 = X(ijk+2*di+3*dj+3*dk);double x333 = X(ijk+3*di+3*dj+3*dk);double x433 = X(ijk+4*di+3*dj+3*dk);
+      double x123 = X(ijk+  di+2*dj+3*dk);double x223 = X(ijk+2*di+2*dj+3*dk);double x323 = X(ijk+3*di+2*dj+3*dk);double x423 = X(ijk+4*di+2*dj+3*dk);
+      double x113 = X(ijk+  di+  dj+3*dk);double x213 = X(ijk+2*di+  dj+3*dk);double x313 = X(ijk+3*di+  dj+3*dk);double x413 = X(ijk+4*di+  dj+3*dk);
 
-      double x142 = x[ijk+  di+4*dj+2*dk];double x242 = x[ijk+2*di+4*dj+2*dk];double x342 = x[ijk+3*di+4*dj+2*dk];double x442 = x[ijk+4*di+4*dj+2*dk];
-      double x132 = x[ijk+  di+3*dj+2*dk];double x232 = x[ijk+2*di+3*dj+2*dk];double x332 = x[ijk+3*di+3*dj+2*dk];double x432 = x[ijk+4*di+3*dj+2*dk];
-      double x122 = x[ijk+  di+2*dj+2*dk];double x222 = x[ijk+2*di+2*dj+2*dk];double x322 = x[ijk+3*di+2*dj+2*dk];double x422 = x[ijk+4*di+2*dj+2*dk];
-      double x112 = x[ijk+  di+  dj+2*dk];double x212 = x[ijk+2*di+  dj+2*dk];double x312 = x[ijk+3*di+  dj+2*dk];double x412 = x[ijk+4*di+  dj+2*dk];
+      double x142 = X(ijk+  di+4*dj+2*dk);double x242 = X(ijk+2*di+4*dj+2*dk);double x342 = X(ijk+3*di+4*dj+2*dk);double x442 = X(ijk+4*di+4*dj+2*dk);
+      double x132 = X(ijk+  di+3*dj+2*dk);double x232 = X(ijk+2*di+3*dj+2*dk);double x332 = X(ijk+3*di+3*dj+2*dk);double x432 = X(ijk+4*di+3*dj+2*dk);
+      double x122 = X(ijk+  di+2*dj+2*dk);double x222 = X(ijk+2*di+2*dj+2*dk);double x322 = X(ijk+3*di+2*dj+2*dk);double x422 = X(ijk+4*di+2*dj+2*dk);
+      double x112 = X(ijk+  di+  dj+2*dk);double x212 = X(ijk+2*di+  dj+2*dk);double x312 = X(ijk+3*di+  dj+2*dk);double x412 = X(ijk+4*di+  dj+2*dk);
 
-      double x141 = x[ijk+  di+4*dj+  dk];double x241 = x[ijk+2*di+4*dj+  dk];double x341 = x[ijk+3*di+4*dj+  dk];double x441 = x[ijk+4*di+4*dj+  dk];
-      double x131 = x[ijk+  di+3*dj+  dk];double x231 = x[ijk+2*di+3*dj+  dk];double x331 = x[ijk+3*di+3*dj+  dk];double x431 = x[ijk+4*di+3*dj+  dk];
-      double x121 = x[ijk+  di+2*dj+  dk];double x221 = x[ijk+2*di+2*dj+  dk];double x321 = x[ijk+3*di+2*dj+  dk];double x421 = x[ijk+4*di+2*dj+  dk];
-      double x111 = x[ijk+  di+  dj+  dk];double x211 = x[ijk+2*di+  dj+  dk];double x311 = x[ijk+3*di+  dj+  dk];double x411 = x[ijk+4*di+  dj+  dk];
+      double x141 = X(ijk+  di+4*dj+  dk);double x241 = X(ijk+2*di+4*dj+  dk);double x341 = X(ijk+3*di+4*dj+  dk);double x441 = X(ijk+4*di+4*dj+  dk);
+      double x131 = X(ijk+  di+3*dj+  dk);double x231 = X(ijk+2*di+3*dj+  dk);double x331 = X(ijk+3*di+3*dj+  dk);double x431 = X(ijk+4*di+3*dj+  dk);
+      double x121 = X(ijk+  di+2*dj+  dk);double x221 = X(ijk+2*di+2*dj+  dk);double x321 = X(ijk+3*di+2*dj+  dk);double x421 = X(ijk+4*di+2*dj+  dk);
+      double x111 = X(ijk+  di+  dj+  dk);double x211 = X(ijk+2*di+  dj+  dk);double x311 = X(ijk+3*di+  dj+  dk);double x411 = X(ijk+4*di+  dj+  dk);
 
       // 32 stencils in i...
       double n11 = OneTwelfth*(  -77.0*x111 +  43.0*x211 -  17.0*x311 +  3.0*x411 );
@@ -635,121 +522,186 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
       xn[ijk-di-dj   ] = ffn;
       xn[ijk-di-dj-dk] = fff;
     }
-  }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }
 
-
 //------------------------------------------------------------------------------------------------------------------------------
-void extrapolate_betas(level_type * level){
-  if(level->boundary_condition.type == BC_PERIODIC)return; // no BC's to apply !
-  int shape=0;
+template <int log_dim, int num_batch, int batch_size>
+__global__ void extrapolate_betas_kernel(level_type level, int shape){
+  // thread exit condition
+  int bid = blockIdx.x*num_batch + threadIdx.x/batch_size;
+  if(bid >= level.boundary_condition.num_blocks[shape]) return;
 
-  int buffer;
-  uint64_t _timeStart = CycleTime();
-  PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
-  for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
-    int i,j,k;
-    const int       box = level->boundary_condition.blocks[shape][buffer].read.box; 
-    const int     dim_i = level->boundary_condition.blocks[shape][buffer].dim.i;
-    const int     dim_j = level->boundary_condition.blocks[shape][buffer].dim.j;
-    const int     dim_k = level->boundary_condition.blocks[shape][buffer].dim.k;
-    const int       ilo = level->boundary_condition.blocks[shape][buffer].read.i;
-    const int       jlo = level->boundary_condition.blocks[shape][buffer].read.j;
-    const int       klo = level->boundary_condition.blocks[shape][buffer].read.k;
+  // one CUDA thread block operates on 'batch_size' HPGMG tiles/blocks
+  blockCopy_type block = level.boundary_condition.blocks[shape][bid];
 
-    // total hack/reuse of the existing boundary list...
-    //   however, whereas boundary subtype represents the normal to the domain at that point, 
-    //   one needs the box-relative (not domain-relative) normal when extending the face averaged beta's into the ghost zones
-    //   Thus, I reuse the list to tell me which areas are beyond the domain boundary, but must calculate their normals here
-          int   subtype = 13;
-    if(ilo <               0)subtype-=1;
-    if(jlo <               0)subtype-=3;
-    if(klo <               0)subtype-=9;
-    if(ilo >= level->box_dim)subtype+=1;
-    if(jlo >= level->box_dim)subtype+=3;
-    if(klo >= level->box_dim)subtype+=9;
-    const int    normal = 26-subtype; // invert the normal vector
+  int i,j,k;
+  const int       box = block.read.box; 
+  const int     dim_i = block.dim.i;
+  const int     dim_j = block.dim.j;
+  const int     dim_k = block.dim.k;
+  const int       ilo = block.read.i;
+  const int       jlo = block.read.j;
+  const int       klo = block.read.k;
+
+  // total hack/reuse of the existing boundary list...
+  //   however, whereas boundary subtype represents the normal to the domain at that point, 
+  //   one needs the box-relative (not domain-relative) normal when extending the face averaged beta's into the ghost zones
+  //   Thus, I reuse the list to tell me which areas are beyond the domain boundary, but must calculate their normals here
+  int   subtype = 13;
+  if(ilo <               0)subtype-=1;
+  if(jlo <               0)subtype-=3;
+  if(klo <               0)subtype-=9;
+  if(ilo >= level.box_dim)subtype+=1;
+  if(jlo >= level.box_dim)subtype+=3;
+  if(klo >= level.box_dim)subtype+=9;
+  const int    normal = 26-subtype; // invert the normal vector
  
-    // hard code for box to box BC's 
-    const int jStride = level->my_boxes[box].jStride;
-    const int kStride = level->my_boxes[box].kStride;
-    double * __restrict__  beta_i = level->my_boxes[box].vectors[VECTOR_BETA_I] + level->my_boxes[box].ghosts*(1+jStride+kStride);
-    double * __restrict__  beta_j = level->my_boxes[box].vectors[VECTOR_BETA_J] + level->my_boxes[box].ghosts*(1+jStride+kStride);
-    double * __restrict__  beta_k = level->my_boxes[box].vectors[VECTOR_BETA_K] + level->my_boxes[box].ghosts*(1+jStride+kStride);
+  // hard code for box to box BC's 
+  const int jStride = level.my_boxes[box].jStride;
+  const int kStride = level.my_boxes[box].kStride;
+  double * __restrict__  beta_i = level.my_boxes[box].vectors[VECTOR_BETA_I] + level.my_boxes[box].ghosts*(1+jStride+kStride);
+  double * __restrict__  beta_j = level.my_boxes[box].vectors[VECTOR_BETA_J] + level.my_boxes[box].ghosts*(1+jStride+kStride);
+  double * __restrict__  beta_k = level.my_boxes[box].vectors[VECTOR_BETA_K] + level.my_boxes[box].ghosts*(1+jStride+kStride);
 
-    // convert normal vector into pointer offsets...
-    const int di = (((normal % 3)  )-1);
-    const int dj = (((normal % 9)/3)-1);
-    const int dk = (((normal / 9)  )-1);
+  // convert normal vector into pointer offsets...
+  const int di = (((normal % 3)  )-1);
+  const int dj = (((normal % 9)/3)-1);
+  const int dk = (((normal / 9)  )-1);
 
-    // beta_i should be extrapolated in the j- and k-directions, but not i
-    // beta_j should be extrapolated in the i- and k-directions, but not j
-    // beta_k should be extrapolated in the i- and j-directions, but not k
-    // e.g.
-    //                  .................................
-    //                 .       .       .       .       .
-    //                .       .  ???  .  ???  .       .
-    //               .       .       .       .       .
-    //              ........+-------+-------+........
-    //             .       /       /       /       .
-    //            .  ???  /<betaK>/<betaK>/  ???  .
-    //           .       /       /       /       .
-    //          ........+-------+-------+........
-    //         .       /       /       /       .
-    //        .  ???  /<betaK>/<betaK>/  ???  .
-    //       .       /       /       /       .
-    //      ........+-------+-------+........   k   j
-    //     .       .       .       .       .    ^  ^   
-    //    .       .  ???  .  ???  .       .     | /
-    //   .       .       .       .       .      |/
-    //  .................................       +-----> i
-    //
-    const int biStride =      dj*jStride + dk*kStride;
-    const int bjStride = di              + dk*kStride;
-    const int bkStride = di + dj*jStride             ;
+  // beta_i should be extrapolated in the j- and k-directions, but not i
+  // beta_j should be extrapolated in the i- and k-directions, but not j
+  // beta_k should be extrapolated in the i- and j-directions, but not k
+  // e.g.
+  //                  .................................
+  //                 .       .       .       .       .
+  //                .       .  ???  .  ???  .       .
+  //               .       .       .       .       .
+  //              ........+-------+-------+........
+  //             .       /       /       /       .
+  //            .  ???  /<betaK>/<betaK>/  ???  .
+  //           .       /       /       /       .
+  //          ........+-------+-------+........
+  //         .       /       /       /       .
+  //        .  ???  /<betaK>/<betaK>/  ???  .
+  //       .       /       /       /       .
+  //      ........+-------+-------+........   k   j
+  //     .       .       .       .       .    ^  ^   
+  //    .       .  ???  .  ???  .       .     | /
+  //   .       .       .       .       .      |/
+  //  .................................       +-----> i
+  //
+  const int biStride =      dj*jStride + dk*kStride;
+  const int bjStride = di              + dk*kStride;
+  const int bkStride = di + dj*jStride             ;
 
-    // note, 
-    //   the face values normal to i should have been filled via RESTRICT_I (skip them)
-    //   the face values normal to j should have been filled via RESTRICT_J (skip them)
-    //   the face values normal to k should have been filled via RESTRICT_K (skip them)
-    if(level->box_dim>=5){
-      // quartic extrapolation... 
-      for(k=0;k<dim_k;k++){
-      for(j=0;j<dim_j;j++){
-      for(i=0;i<dim_i;i++){
-        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-        if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 5.0*beta_i[ijk+biStride] - 10.0*beta_i[ijk+2*biStride] + 10.0*beta_i[ijk+3*biStride] - 5.0*beta_i[ijk+4*biStride] + beta_i[ijk+5*biStride];}
-        if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 5.0*beta_j[ijk+bjStride] - 10.0*beta_j[ijk+2*bjStride] + 10.0*beta_j[ijk+3*bjStride] - 5.0*beta_j[ijk+4*bjStride] + beta_j[ijk+5*bjStride];}
-        if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 5.0*beta_k[ijk+bkStride] - 10.0*beta_k[ijk+2*bkStride] + 10.0*beta_k[ijk+3*bkStride] - 5.0*beta_k[ijk+4*bkStride] + beta_k[ijk+5*bkStride];}
-      }}}
-    }else 
-    if(level->box_dim>=4){
-      // cubic extrapolation... 
-      for(k=0;k<dim_k;k++){
-      for(j=0;j<dim_j;j++){
-      for(i=0;i<dim_i;i++){
-        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-        if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 4.0*beta_i[ijk+biStride] - 6.0*beta_i[ijk+2*biStride] + 4.0*beta_i[ijk+3*biStride] - beta_i[ijk+4*biStride];}
-        if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 4.0*beta_j[ijk+bjStride] - 6.0*beta_j[ijk+2*bjStride] + 4.0*beta_j[ijk+3*bjStride] - beta_j[ijk+4*bjStride];}
-        if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 4.0*beta_k[ijk+bkStride] - 6.0*beta_k[ijk+2*bkStride] + 4.0*beta_k[ijk+3*bkStride] - beta_k[ijk+4*bkStride];}
-      }}}
-    }else 
-    if(level->box_dim>=2){
-      // linear extrapolation...
-      for(k=0;k<dim_k;k++){
-      for(j=0;j<dim_j;j++){
-      for(i=0;i<dim_i;i++){
-        int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-        if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 2.0*beta_i[ijk+biStride] - beta_i[ijk+2*biStride];}
-        if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 2.0*beta_j[ijk+bjStride] - beta_j[ijk+2*bjStride];}
-        if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 2.0*beta_k[ijk+bkStride] - beta_k[ijk+2*bkStride];}
-      }}}
+  // note, 
+  //   the face values normal to i should have been filled via RESTRICT_I (skip them)
+  //   the face values normal to j should have been filled via RESTRICT_J (skip them)
+  //   the face values normal to k should have been filled via RESTRICT_K (skip them)
+  if(level.box_dim>=5){
+    // quartic extrapolation... 
+    for(int gid=threadIdx.x%batch_size; gid<dim_i*dim_j*dim_k; gid+=batch_size){
+      k=(gid/dim_i)/dim_j;
+      j=(gid/dim_i)%dim_j;
+      i=gid%dim_i;
+      int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+      if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 5.0*beta_i[ijk+biStride] - 10.0*beta_i[ijk+2*biStride] + 10.0*beta_i[ijk+3*biStride] - 5.0*beta_i[ijk+4*biStride] + beta_i[ijk+5*biStride];}
+      if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 5.0*beta_j[ijk+bjStride] - 10.0*beta_j[ijk+2*bjStride] + 10.0*beta_j[ijk+3*bjStride] - 5.0*beta_j[ijk+4*bjStride] + beta_j[ijk+5*bjStride];}
+      if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 5.0*beta_k[ijk+bkStride] - 10.0*beta_k[ijk+2*bkStride] + 10.0*beta_k[ijk+3*bkStride] - 5.0*beta_k[ijk+4*bkStride] + beta_k[ijk+5*bkStride];}
     }
-
+  }else 
+  if(level.box_dim>=4){
+    // cubic extrapolation... 
+    for(int gid=threadIdx.x%batch_size; gid<dim_i*dim_j*dim_k; gid+=batch_size){
+      k=(gid/dim_i)/dim_j;
+      j=(gid/dim_i)%dim_j;
+      i=gid%dim_i;
+      int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+      if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 4.0*beta_i[ijk+biStride] - 6.0*beta_i[ijk+2*biStride] + 4.0*beta_i[ijk+3*biStride] - beta_i[ijk+4*biStride];}
+      if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 4.0*beta_j[ijk+bjStride] - 6.0*beta_j[ijk+2*bjStride] + 4.0*beta_j[ijk+3*bjStride] - beta_j[ijk+4*bjStride];}
+      if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 4.0*beta_k[ijk+bkStride] - 6.0*beta_k[ijk+2*bkStride] + 4.0*beta_k[ijk+3*bkStride] - beta_k[ijk+4*bkStride];}
+    }
+  }else 
+  if(level.box_dim>=2){
+    // linear extrapolation...
+    for(int gid=threadIdx.x%batch_size; gid<dim_i*dim_j*dim_k; gid+=batch_size){
+      k=(gid/dim_i)/dim_j;
+      j=(gid/dim_i)%dim_j;
+      i=gid%dim_i;
+      int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+      if( (subtype!=14) && (subtype!=12) ){beta_i[ijk] = 2.0*beta_i[ijk+biStride] - beta_i[ijk+2*biStride];}
+      if( (subtype!=16) && (subtype!=10) ){beta_j[ijk] = 2.0*beta_j[ijk+bjStride] - beta_j[ijk+2*bjStride];}
+      if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 2.0*beta_k[ijk+bkStride] - beta_k[ijk+2*bkStride];}
+    }
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }
+#undef  KERNEL
+#define KERNEL(log_dim, shape) \
+  apply_BCs_v1_kernel<log_dim,NUM_BATCH,(BLOCK_SIZE/NUM_BATCH)><<<grid,block>>>(level,x_id,shape);
 
-//------------------------------------------------------------------------------------------------------------------------------
-*/
+extern "C"
+void cuda_apply_BCs_v1(level_type level, int x_id, int shape)
+{
+  int block = BLOCK_SIZE;
+  int grid = (level.boundary_condition.num_blocks[shape]+NUM_BATCH-1)/NUM_BATCH; 
+  if(grid<=0) return;
+
+  int log_dim = (int)log2((double)level.dim.i);
+  KERNEL_LEVEL(log_dim, shape);
+  CUDA_ERROR
+}
+#undef  KERNEL
+#define KERNEL(log_dim, shape) \
+  apply_BCs_v2_kernel<log_dim,NUM_BATCH,(BLOCK_SIZE/NUM_BATCH)><<<grid,block>>>(level,x_id,shape);
+
+extern "C"
+void cuda_apply_BCs_v2(level_type level, int x_id, int shape)
+{
+  int block = BLOCK_SIZE;
+  int grid = (level.boundary_condition.num_blocks[shape]+NUM_BATCH-1)/NUM_BATCH; 
+  if(grid<=0) return;
+
+  if(level.box_ghosts>1){
+    zero_ghost_region_kernel<NUM_BATCH,(BLOCK_SIZE/NUM_BATCH)><<<grid,block>>>(level,x_id,shape);
+    CUDA_ERROR
+  }
+
+  int log_dim = (int)log2((double)level.dim.i);
+  KERNEL_LEVEL(log_dim, shape);
+  CUDA_ERROR
+}
+#undef  KERNEL
+#define KERNEL(log_dim, shape) \
+  apply_BCs_v4_kernel<log_dim,NUM_BATCH,(BLOCK_SIZE/NUM_BATCH)><<<grid,block>>>(level,x_id,shape);
+
+extern "C"
+void cuda_apply_BCs_v4(level_type level, int x_id, int shape)
+{
+  int block = BLOCK_SIZE;
+  int grid = (level.boundary_condition.num_blocks[shape]+NUM_BATCH-1)/NUM_BATCH; 
+  if(grid<=0) return;
+
+  if(level.box_ghosts>1){
+    zero_ghost_region_kernel<NUM_BATCH,(BLOCK_SIZE/NUM_BATCH)><<<grid,block>>>(level,x_id,shape);
+    CUDA_ERROR
+  }
+
+  int log_dim = (int)log2((double)level.dim.i);
+  KERNEL_LEVEL(log_dim, shape);
+  CUDA_ERROR
+}
+#undef  KERNEL
+#define KERNEL(log_dim, shape) \
+  extrapolate_betas_kernel<log_dim,NUM_BATCH,(BLOCK_SIZE/NUM_BATCH)><<<grid,block>>>(level,shape);
+
+extern "C"
+void cuda_extrapolate_betas(level_type level, int shape)
+{
+  int block = BLOCK_SIZE;
+  int grid = (level.boundary_condition.num_blocks[shape]+NUM_BATCH-1)/NUM_BATCH; 
+  if(grid<=0) return;
+
+  int log_dim = (int)log2((double)level.dim.i);
+  KERNEL_LEVEL(log_dim, shape);
+  CUDA_ERROR
+}

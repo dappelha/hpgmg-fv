@@ -76,43 +76,68 @@
 //------------------------------------------------------------------------------------------------------------------------------
 #define Dinv_ijk() Dinv[ijk]        // simply retrieve it rather than recalculating it
 //------------------------------------------------------------------------------------------------------------------------------
+#define STENCIL_TWELFTH ( 0.0833333333333333333)  // 1.0/12.0;
+//------------------------------------------------------------------------------------------------------------------------------
 #ifdef STENCIL_VARIABLE_COEFFICIENT
   #ifdef USE_HELMHOLTZ // Helmholtz
-  #define H0	( a*alpha[ijk]*X(ijk) )
+  #define H0    ( a*alpha[ijk]*X(ijk) )
   #else // Poisson
   #define H0
   #endif
-  #define apply_op_ijk()                        \
-  (                                             \
-  H0 - b*h2inv*(               			\
-  + BI(ijk+1      )*( X(ijk+1      ) - X(ijk) ) \
-  + BI(ijk        )*( X(ijk-1      ) - X(ijk) ) \
-  + BJ(ijk+jStride)*( X(ijk+jStride) - X(ijk) ) \
-  + BJ(ijk        )*( X(ijk-jStride) - X(ijk) ) \
-  + BK(ijk+kStride)*( X(ijk+kStride) - X(ijk) ) \
-  + BK(ijk        )*( X(ijk-kStride) - X(ijk) ) \
-  )        				        \
+  #define apply_op_ijk()                                                                                                           	\
+  (																	\
+  H0 - b*h2inv*(															\
+  STENCIL_TWELFTH*(															\
+  + BI(ijk        )*( 15.0*(X(ijk-1      )-X(ijk)) - (X(ijk-2        )-X(ijk+1      )) )						\
+  + BI(ijk+1      )*( 15.0*(X(ijk+1      )-X(ijk)) - (X(ijk+2        )-X(ijk-1      )) )						\
+  + BJ(ijk        )*( 15.0*(X(ijk-jStride)-X(ijk)) - (X(ijk-2*jStride)-X(ijk+jStride)) )						\
+  + BJ(ijk+jStride)*( 15.0*(X(ijk+jStride)-X(ijk)) - (X(ijk+2*jStride)-X(ijk-jStride)) )						\
+  + BK(ijk        )*( 15.0*(X(ijk-kStride)-X(ijk)) - (X(ijk-2*kStride)-X(ijk+kStride)) )						\
+  + BK(ijk+kStride)*( 15.0*(X(ijk+kStride)-X(ijk)) - (X(ijk+2*kStride)-X(ijk-kStride)) ) )						\
+																	\
+  + 0.25*STENCIL_TWELFTH*(                                                                                                              \
+  + (BI(ijk        +jStride)-BI(ijk        -jStride)) * (X(ijk-1      +jStride)-X(ijk+jStride)-X(ijk-1      -jStride)+X(ijk-jStride))	\
+  + (BI(ijk        +kStride)-BI(ijk        -kStride)) * (X(ijk-1      +kStride)-X(ijk+kStride)-X(ijk-1      -kStride)+X(ijk-kStride))	\
+  + (BJ(ijk        +1      )-BJ(ijk        -1      )) * (X(ijk-jStride+1      )-X(ijk+1      )-X(ijk-jStride-1      )+X(ijk-1      ))	\
+  + (BJ(ijk        +kStride)-BJ(ijk        -kStride)) * (X(ijk-jStride+kStride)-X(ijk+kStride)-X(ijk-jStride-kStride)+X(ijk-kStride))	\
+  + (BK(ijk        +1      )-BK(ijk        -1      )) * (X(ijk-kStride+1      )-X(ijk+1      )-X(ijk-kStride-1      )+X(ijk-1      ))	\
+  + (BK(ijk        +jStride)-BK(ijk        -jStride)) * (X(ijk-kStride+jStride)-X(ijk+jStride)-X(ijk-kStride-jStride)+X(ijk-jStride))	\
+																	\
+  + (BI(ijk+1      +jStride)-BI(ijk+1      -jStride)) * (X(ijk+1      +jStride)-X(ijk+jStride)-X(ijk+1      -jStride)+X(ijk-jStride))	\
+  + (BI(ijk+1      +kStride)-BI(ijk+1      -kStride)) * (X(ijk+1      +kStride)-X(ijk+kStride)-X(ijk+1      -kStride)+X(ijk-kStride))	\
+  + (BJ(ijk+jStride+1      )-BJ(ijk+jStride-1      )) * (X(ijk+jStride+1      )-X(ijk+1      )-X(ijk+jStride-1      )+X(ijk-1      ))	\
+  + (BJ(ijk+jStride+kStride)-BJ(ijk+jStride-kStride)) * (X(ijk+jStride+kStride)-X(ijk+kStride)-X(ijk+jStride-kStride)+X(ijk-kStride))	\
+  + (BK(ijk+kStride+1      )-BK(ijk+kStride-1      )) * (X(ijk+kStride+1      )-X(ijk+1      )-X(ijk+kStride-1      )+X(ijk-1      ))	\
+  + (BK(ijk+kStride+jStride)-BK(ijk+kStride-jStride)) * (X(ijk+kStride+jStride)-X(ijk+jStride)-X(ijk+kStride-jStride)+X(ijk-jStride)) )	\
+  )																	\
   )
 #else // constant coefficient
-  #define apply_op_ijk()  \
-  (                       \
-  a*X(ijk) - b*h2inv*(    \
-  + X(ijk+1      )        \
-  + X(ijk-1      )        \
-  + X(ijk+jStride)        \
-  + X(ijk-jStride)        \
-  + X(ijk+kStride)        \
-  + X(ijk-kStride)        \
-  - X(ijk        )*6.0    \
-  )                       \
+  #define apply_op_ijk()	 	\
+  (					\
+  a*x[ijk] - b*h2inv*STENCIL_TWELFTH*(	\
+  - 1.0*(X(ijk-2*kStride) +		\
+         X(ijk-2*jStride) +		\
+         X(ijk-2        ) +		\
+         X(ijk+2        ) +		\
+         X(ijk+2*jStride) +		\
+         X(ijk+2*kStride) )		\
+  +16.0*(X(ijk  -kStride) +		\
+         X(ijk  -jStride) +		\
+         X(ijk  -1      ) +		\
+         X(ijk  +1      ) +		\
+         X(ijk  +jStride) +		\
+         X(ijk  +kStride) )		\
+  -90.0*(X(ijk          ) ) 		\
+  )					\
   )
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 #ifdef  USE_GSRB
-#define NUM_SMOOTHS      2 // RBRB
+#define GSRB_OOP
+#define NUM_SMOOTHS      3 // RBRBRB
 #elif   USE_CHEBY
 #define NUM_SMOOTHS      1
-#define CHEBYSHEV_DEGREE 4 // i.e. one degree-4 polynomial smoother
+#define CHEBYSHEV_DEGREE 6 // i.e. one degree-6 polynomial smoother
 #elif   USE_JACOBI
 #define NUM_SMOOTHS      6
 #elif   USE_L1JACOBI
@@ -127,9 +152,9 @@
   #include "stencils/gsrb.h"
 #else
   #ifdef USE_SHM // shared memory
-  #include "stencils/smooth.fv2.h"
+  #include "stencils/smooths.fv4.h"
   #elif  USE_REG // registers
-  #include "stencils/smooth.fv2.h"
+  #include "stencils/smooth.fv4.h"
   #else // baseline
   #include "stencils/smooth.h"
   #endif
@@ -137,9 +162,9 @@
 //------------------------------------------------------------------------------------------------------------------------------
 // include residual
 #ifdef USE_SHM // shared memory
-#include "stencils/residual.fv2.h"
+#include "stencils/residual.fv4.h"
 #elif  USE_REG // registers
-#include "stencils/residual.fv2.h"
+#include "stencils/residual.fv4.h"
 #else // baseline
 #include "stencils/residual.h"
 #endif
@@ -147,7 +172,8 @@
 // include other kernels
 #include "blockCopy.h"
 #include "misc.h"
-#include "boundary_fd.h"
+#include "boundary_fv.h"
 #include "restriction.h"
-#include "interpolation.h"
+#include "interpolation_v2.h"
+#include "interpolation_v4.h"
 //------------------------------------------------------------------------------------------------------------------------------

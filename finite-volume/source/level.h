@@ -212,6 +212,6 @@ void append_block_to_list(blockCopy_type ** blocks, int *allocated_blocks, int *
 // custom memory management routines
 void* um_malloc(size_t size, int access_policy);
 void* um_realloc(void *ptr, size_t size, int access_policy);
-void  um_free(void *ptr);
+void  um_free(void *ptr, int access_policy);
 //------------------------------------------------------------------------------------------------------------------------------
 #endif

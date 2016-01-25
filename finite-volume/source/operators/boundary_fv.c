@@ -283,6 +283,11 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
 
   int buffer;
   uint64_t _timeStart = CycleTime();
+  if(level->use_cuda) {
+    cuda_apply_BCs_v4(*level,x_id,shape);
+    cudaDeviceSynchronize();
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     int i,j,k;
@@ -553,6 +558,7 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
       xn[ijk-di-dj-dk] = fff;
     }
   }
+  }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }
 
@@ -564,6 +570,11 @@ void extrapolate_betas(level_type * level){
 
   int buffer;
   uint64_t _timeStart = CycleTime();
+  if(level->use_cuda) {
+    cuda_extrapolate_betas(*level,shape);
+    cudaDeviceSynchronize();
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
   for(buffer=0;buffer<level->boundary_condition.num_blocks[shape];buffer++){
     int i,j,k;
@@ -663,7 +674,7 @@ void extrapolate_betas(level_type * level){
         if( (subtype!=22) && (subtype!= 4) ){beta_k[ijk] = 2.0*beta_k[ijk+bkStride] - beta_k[ijk+2*bkStride];}
       }}}
     }
-
+  }
   }
   level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
 }

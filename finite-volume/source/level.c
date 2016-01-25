@@ -22,6 +22,7 @@
 //------------------------------------------------------------------------------------------------------------------------------
 #include "level.h"
 #include "operators.h"
+#include "cuda/common.h"
 //------------------------------------------------------------------------------------------------------------------------------
 void print_communicator(int printSendRecv, int rank, int level, communicator_type *comm){
   int i;
@@ -496,9 +497,12 @@ void build_boundary_conditions(level_type *level, int shape){
 
     // default tile sizes...
     // NOTE, BC's may never tile smaller than the ghost zone depth
-    int blockcopy_i = (BC_TILE_I < level->box_ghosts) ? level->box_ghosts : BC_TILE_I;
-    int blockcopy_j = (BC_TILE_J < level->box_ghosts) ? level->box_ghosts : BC_TILE_J;
-    int blockcopy_k = (BC_TILE_K < level->box_ghosts) ? level->box_ghosts : BC_TILE_K;
+    int BLOCK_TILE_I = 64;
+    int BLOCK_TILE_J = 16;
+    int BLOCK_TILE_K = 16;
+    int blockcopy_i = (BLOCK_TILE_I < level->box_ghosts) ? level->box_ghosts : BLOCK_TILE_I;
+    int blockcopy_j = (BLOCK_TILE_J < level->box_ghosts) ? level->box_ghosts : BLOCK_TILE_J;
+    int blockcopy_k = (BLOCK_TILE_K < level->box_ghosts) ? level->box_ghosts : BLOCK_TILE_K;
 
     #if 0
     // 2D tiling of faces
@@ -1033,11 +1037,11 @@ void create_vectors(level_type *level, int numVectors){
     // if there is existing FP data... copy it, then free old data and pointer array
     if(level->numVectors>0){
       memcpy(tmpbuf,old_vector0,(uint64_t)level->numVectors*level->num_my_boxes*level->box_volume*sizeof(double)); // FIX... omp thread ???
-      if(old_vectors_base)um_free(old_vectors_base); // free old data...
+      if(old_vectors_base)um_free(old_vectors_base, level->um_access_policy); // free old data...
     }
     // allocate an array of pointers which point to the union of boxes for each vector
     // NOTE, this requires just one copyin per vector to an accelerator rather than requiring one copyin per box per vector
-    if(level->numVectors>0)um_free(level->vectors); // free any previously allocated vector array
+    if(level->numVectors>0)um_free(level->vectors, level->um_access_policy); // free any previously allocated vector array
     level->vectors = (double **)um_malloc(numVectors*sizeof(double*), level->um_access_policy);
     if((numVectors>0)&&(level->vectors==NULL)){fprintf(stderr,"malloc failed - level->vectors\n");exit(0);}
     uint64_t c;for(c=0;c<numVectors;c++){level->vectors[c] = tmpbuf + (uint64_t)c*level->num_my_boxes*level->box_volume;}
@@ -1045,6 +1049,7 @@ void create_vectors(level_type *level, int numVectors){
     // allocate vectors individually (simple, but may cause conflict misses)
     double ** old_vectors = level->vectors;
     level->vectors = (double **)um_malloc(numVectors*sizeof(double*), level->um_access_policy);
+    cudaDeviceSynchronize();
     uint64_t c;
     for(c=                0;c<level->numVectors;c++){level->vectors[c] = old_vectors[c];}
     for(c=level->numVectors;c<       numVectors;c++){
@@ -1055,7 +1060,7 @@ void create_vectors(level_type *level, int numVectors){
       #endif
       for(ofs=0;ofs<(uint64_t)level->num_my_boxes*level->box_volume;ofs++){level->vectors[c][ofs]=0.0;} // Faster in MPI+OpenMP environments, but not NUMA-aware
     }
-    um_free(old_vectors);
+    um_free(old_vectors, level->um_access_policy);
   #endif
 
 
@@ -1069,7 +1074,7 @@ void create_vectors(level_type *level, int numVectors){
     int kStride = level->boxes_in.i*level->boxes_in.j;
     int b=i + j*jStride + k*kStride;
     if(level->rank_of_box[b]==level->my_rank){
-      if(level->numVectors>0)um_free(level->my_boxes[box].vectors); // free previously allocated vector array
+      if(level->numVectors>0)um_free(level->my_boxes[box].vectors, level->um_access_policy); // free previously allocated vector array
       level->my_boxes[box].vectors = (double **)um_malloc(numVectors*sizeof(double*), level->um_access_policy);
       if((numVectors>0)&&(level->my_boxes[box].vectors==NULL)){fprintf(stderr,"malloc failed - level->my_boxes[box].vectors\n");exit(0);}
       uint64_t c;for(c=0;c<numVectors;c++){level->my_boxes[box].vectors[c] = level->vectors[c] + (uint64_t)box*level->box_volume;}
@@ -1390,51 +1395,52 @@ void max_level_timers(level_type *level){
 // free all memory allocated by this level
 // n.b. in some cases a malloc was used as the basis for an array of pointers.  As such free(x[0])
 void destroy_level(level_type *level){
+
   int i,j;
   if(level->my_rank==0){fprintf(stdout,"attempting to destroy the %5d^3 level... ",level->dim.i);fflush(stdout);}
 
   // box ...
-  for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].vectors)um_free(level->my_boxes[i].vectors);
+  for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].vectors)um_free(level->my_boxes[i].vectors, level->um_access_policy);
 
   // misc ...
   if(level->rank_of_box )free(level->rank_of_box);
-  if(level->my_boxes    )um_free(level->my_boxes);
-  if(level->my_blocks   )um_free(level->my_blocks);
-  if(level->RedBlack_FP )um_free(level->RedBlack_FP);
-  if(level->chebyshev_c1)um_free(level->chebyshev_c1);
-  if(level->chebyshev_c2)um_free(level->chebyshev_c2);
+  if(level->my_boxes    )um_free(level->my_boxes, level->um_access_policy);
+  if(level->my_blocks   )um_free(level->my_blocks, level->um_access_policy);
+  if(level->RedBlack_FP )um_free(level->RedBlack_FP, level->um_access_policy);
+  if(level->chebyshev_c1)um_free(level->chebyshev_c1, level->um_access_policy);
+  if(level->chebyshev_c2)um_free(level->chebyshev_c2, level->um_access_policy);
 
   // FP vector data...
   #ifdef VECTOR_MALLOC_BULK
-  if(level->vectors_base)um_free(level->vectors_base);
-  if(level->vectors     )um_free(level->vectors);
+  if(level->vectors_base)um_free(level->vectors_base, level->um_access_policy);
+  if(level->vectors     )um_free(level->vectors, level->um_access_policy);
   #else
-  for(i=0;i<level->numVectors;i++)if(level->vectors[i])um_free(level->vectors[i]);
-  if(level->vectors     )um_free(level->vectors);
+  for(i=0;i<level->numVectors;i++)if(level->vectors[i])um_free(level->vectors[i], level->um_access_policy);
+  if(level->vectors     )um_free(level->vectors, level->um_access_policy);
   #endif
 
   // boundary condition mini program...
   for(i=0;i<STENCIL_MAX_SHAPES;i++){
-    if(level->boundary_condition.blocks[i])um_free(level->boundary_condition.blocks[i]);
+    if(level->boundary_condition.blocks[i])um_free(level->boundary_condition.blocks[i], level->um_access_policy);
   }
 
   // ghost zone exchange mini programs...
   for(i=0;i<STENCIL_MAX_SHAPES;i++){
     if(level->exchange_ghosts[i].num_recvs>0){
-    for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])um_free(level->exchange_ghosts[i].recv_buffers[j]);
+    for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])um_free(level->exchange_ghosts[i].recv_buffers[j], level->um_access_policy);
     if(level->exchange_ghosts[i].recv_buffers)free(level->exchange_ghosts[i].recv_buffers);
     if(level->exchange_ghosts[i].recv_ranks  )free(level->exchange_ghosts[i].recv_ranks  );
     if(level->exchange_ghosts[i].recv_sizes  )free(level->exchange_ghosts[i].recv_sizes  );
     }
     if(level->exchange_ghosts[i].num_sends>0){
-    for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])um_free(level->exchange_ghosts[i].send_buffers[j]);
+    for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])um_free(level->exchange_ghosts[i].send_buffers[j], level->um_access_policy);
     if(level->exchange_ghosts[i].send_buffers)free(level->exchange_ghosts[i].send_buffers);
     if(level->exchange_ghosts[i].send_ranks  )free(level->exchange_ghosts[i].send_ranks  );
     if(level->exchange_ghosts[i].send_sizes  )free(level->exchange_ghosts[i].send_sizes  );
     }
-    if(level->exchange_ghosts[i].blocks[0]   )um_free(level->exchange_ghosts[i].blocks[0]   );
-    if(level->exchange_ghosts[i].blocks[1]   )um_free(level->exchange_ghosts[i].blocks[1]   );
-    if(level->exchange_ghosts[i].blocks[2]   )um_free(level->exchange_ghosts[i].blocks[2]   );
+    if(level->exchange_ghosts[i].blocks[0]   )um_free(level->exchange_ghosts[i].blocks[0], level->um_access_policy);
+    if(level->exchange_ghosts[i].blocks[1]   )um_free(level->exchange_ghosts[i].blocks[1], level->um_access_policy);
+    if(level->exchange_ghosts[i].blocks[2]   )um_free(level->exchange_ghosts[i].blocks[2], level->um_access_policy);
     #ifdef USE_MPI
     if(level->exchange_ghosts[i].requests    )free(level->exchange_ghosts[i].requests    );
     if(level->exchange_ghosts[i].status      )free(level->exchange_ghosts[i].status      );
@@ -1444,22 +1450,22 @@ void destroy_level(level_type *level){
   // restriction mini programs...
   for(i=0;i<4;i++){
     if(level->restriction[i].num_recvs>0){
-    for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])um_free(level->restriction[i].recv_buffers[j]);
-    //if(level->restriction[i].recv_buffers[0])um_free(level->restriction[i].recv_buffers[0]); // allocated in bulk
+    for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])um_free(level->restriction[i].recv_buffers[j], level->um_access_policy);
+    //if(level->restriction[i].recv_buffers[0])um_free(level->restriction[i].recv_buffers[0], level->um_access_policy); // allocated in bulk
     if(level->restriction[i].recv_buffers   )free(level->restriction[i].recv_buffers   );
     if(level->restriction[i].recv_ranks     )free(level->restriction[i].recv_ranks     );
     if(level->restriction[i].recv_sizes     )free(level->restriction[i].recv_sizes     );
     }
     if(level->restriction[i].num_sends>0){
-    for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])um_free(level->restriction[i].send_buffers[j]);
-    //if(level->restriction[i].send_buffers[0])um_free(level->restriction[i].send_buffers[0]); // allocated in bulk
+    for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])um_free(level->restriction[i].send_buffers[j], level->um_access_policy);
+    //if(level->restriction[i].send_buffers[0])um_free(level->restriction[i].send_buffers[0], level->um_access_policy); // allocated in bulk
     if(level->restriction[i].send_buffers   )free(level->restriction[i].send_buffers   );
     if(level->restriction[i].send_ranks     )free(level->restriction[i].send_ranks     );
     if(level->restriction[i].send_sizes     )free(level->restriction[i].send_sizes     );
     }
-    if(level->restriction[i].blocks[0]      )um_free(level->restriction[i].blocks[0]      );
-    if(level->restriction[i].blocks[1]      )um_free(level->restriction[i].blocks[1]      );
-    if(level->restriction[i].blocks[2]      )um_free(level->restriction[i].blocks[2]      );
+    if(level->restriction[i].blocks[0]      )um_free(level->restriction[i].blocks[0], level->um_access_policy);
+    if(level->restriction[i].blocks[1]      )um_free(level->restriction[i].blocks[1], level->um_access_policy);
+    if(level->restriction[i].blocks[2]      )um_free(level->restriction[i].blocks[2], level->um_access_policy);
     #ifdef USE_MPI
     if(level->restriction[i].requests       )free(level->restriction[i].requests       );
     if(level->restriction[i].status         )free(level->restriction[i].status         );
@@ -1468,22 +1474,22 @@ void destroy_level(level_type *level){
 
   // interpolation mini programs...
   if(level->interpolation.num_recvs>0){
-  for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])um_free(level->interpolation.recv_buffers[j]);
-  //if(level->interpolation.recv_buffers[0])um_free(level->interpolation.recv_buffers[0]); // allocated in bulk
+  for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])um_free(level->interpolation.recv_buffers[j], level->um_access_policy);
+  //if(level->interpolation.recv_buffers[0])um_free(level->interpolation.recv_buffers[0], level->um_access_policy); // allocated in bulk
   if(level->interpolation.recv_buffers   )free(level->interpolation.recv_buffers   );
   if(level->interpolation.recv_ranks     )free(level->interpolation.recv_ranks     );
   if(level->interpolation.recv_sizes     )free(level->interpolation.recv_sizes     );
   }
   if(level->interpolation.num_sends>0){
-  for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])um_free(level->interpolation.send_buffers[j]);
-  //if(level->interpolation.send_buffers[0])um_free(level->interpolation.send_buffers[0]); // allocated in bulk
+  for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])um_free(level->interpolation.send_buffers[j], level->um_access_policy);
+  //if(level->interpolation.send_buffers[0])um_free(level->interpolation.send_buffers[0], level->um_access_policy); // allocated in bulk
   if(level->interpolation.send_buffers   )free(level->interpolation.send_buffers   );
   if(level->interpolation.send_ranks     )free(level->interpolation.send_ranks     );
   if(level->interpolation.send_sizes     )free(level->interpolation.send_sizes     );
   }
-  if(level->interpolation.blocks[0]      )um_free(level->interpolation.blocks[0]      );
-  if(level->interpolation.blocks[1]      )um_free(level->interpolation.blocks[1]      );
-  if(level->interpolation.blocks[2]      )um_free(level->interpolation.blocks[2]      );
+  if(level->interpolation.blocks[0]      )um_free(level->interpolation.blocks[0], level->um_access_policy);
+  if(level->interpolation.blocks[1]      )um_free(level->interpolation.blocks[1], level->um_access_policy);
+  if(level->interpolation.blocks[2]      )um_free(level->interpolation.blocks[2], level->um_access_policy);
   #ifdef USE_MPI
   if(level->interpolation.requests       )free(level->interpolation.requests       );
   if(level->interpolation.status         )free(level->interpolation.status         );
@@ -1497,36 +1503,22 @@ void *um_malloc(size_t size, int access_policy)
 {
 #ifdef CUDA_UM_ALLOC
   void *ptr;
-  cudaError_t rv;
   switch (access_policy) {
   case UM_ACCESS_GPU:
-    rv = cudaMallocManaged(&ptr, size, cudaMemAttachGlobal);
-    if(rv!=cudaSuccess){printf("cudaMallocManaged(...,%ld,cudaMemAttachGlobal) failed: %s\n",size,cudaGetErrorString(rv));fflush(stdout);exit(0);}
+    CUDA_API_ERROR( cudaMallocManaged(&ptr, size, cudaMemAttachGlobal) )
     break;
   case UM_ACCESS_BOTH:
 #ifdef CUDA_UM_ZERO_COPY
     // assumes that the direct access to sysmem is supported on this OS/GPU
-    rv = cudaHostAlloc(&ptr, size, cudaHostAllocDefault);
-    if(rv!=cudaSuccess){printf("cudaHostAlloc(...,%ld,cudaHostAllocDefault) failed: %s\n",size,cudaGetErrorString(rv));fflush(stdout);exit(0);}
+    CUDA_API_ERROR( cudaMallocHost(&ptr, size) )
 #else
     // default is the managed allocation with global attach
-    rv = cudaMallocManaged(&ptr, size, cudaMemAttachGlobal);
-    if(rv!=cudaSuccess){printf("cudaMallocManaged(...,%ld,cudaMemAttachGlobal) failed: %s\n",size,cudaGetErrorString(rv));fflush(stdout);exit(0);}
+    CUDA_API_ERROR( cudaMallocManaged(&ptr, size, cudaMemAttachGlobal) )
 #endif
     break;
   case UM_ACCESS_CPU:
     return malloc(size);
     break;
-/*
-#ifdef CUDA_UM_HOST_ATTACH
-    // attach to host since we will never access these coarse levels from GPU
-    cudaMallocManaged(&ptr, size, cudaMemAttachHost);
-#else
-    // default is the managed allocation with global attach
-    cudaMallocManaged(&ptr, size, cudaMemAttachGlobal);
-#endif
-    break;
-*/
   }
   return ptr;
 #else
@@ -1537,24 +1529,45 @@ void *um_malloc(size_t size, int access_policy)
 
 void *um_realloc(void *ptr, size_t size, int access_policy)
 {
-  if(access_policy==UM_ACCESS_CPU)return(realloc(ptr, size));
-  void *new_ptr;
 #ifdef CUDA_UM_ALLOC
-  new_ptr = um_malloc(size, access_policy);
-  // realloc always happen from size/2 to size in HPGMG
-  cudaMemcpy(new_ptr, ptr, (size/2), cudaMemcpyDefault);
-  cudaFree(ptr);
-#else
-  new_ptr = realloc(ptr, size);
-#endif
+  void *new_ptr;
+  switch (access_policy) {
+  case UM_ACCESS_GPU:
+  case UM_ACCESS_BOTH:
+    new_ptr = um_malloc(size, access_policy);
+    // realloc always happen from size/2 to size in HPGMG
+    CUDA_API_ERROR( cudaMemcpy(new_ptr, ptr, (size/2), cudaMemcpyDefault) )
+    um_free(ptr, access_policy);
+    break;
+  case UM_ACCESS_CPU:
+    new_ptr = realloc(ptr, size);
+    break;
+  }
   return new_ptr;
+#else
+  // note that currently regular heap allocations are not accessible by GPU
+  return realloc(ptr, size);
+#endif
 }
 
-void um_free(void *ptr)
+void um_free(void *ptr, int access_policy)
 {
 #ifdef CUDA_UM_ALLOC
-  if (cudaFree(ptr) != cudaSuccess)
-    cudaFreeHost(ptr);
+  switch(access_policy) {
+  case UM_ACCESS_GPU:
+    CUDA_API_ERROR( cudaFree(ptr) )
+    break;
+  case UM_ACCESS_BOTH:
+#ifdef CUDA_UM_ZERO_COPY
+    CUDA_API_ERROR( cudaFreeHost(ptr) )
+#else
+    CUDA_API_ERROR( cudaFree(ptr) )
+#endif
+    break;
+  case UM_ACCESS_CPU:
+    free(ptr);
+    break;
+  }
 #else
   free(ptr);
 #endif

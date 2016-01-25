@@ -26,42 +26,22 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Divide CUDA block into groups of threads (e.g. quads), each operating on an individual b.c. block.
-#define APPLY_BCS_LINEAR_BLOCK_SIZE	128								// number of threads per block
-#define APPLY_BCS_LINEAR_GROUP_SIZE	16								// number of threads per group
-#define APPLY_BCS_LINEAR_NUM_GROUPS	(APPLY_BCS_LINEAR_BLOCK_SIZE / APPLY_BCS_LINEAR_GROUP_SIZE)	// number of groups per block
-
+// Divide thread block into batches of threads (e.g. quads), each batch operates on one HPGMG tile/block
+#define BLOCK_SIZE	128	// number of threads per thread block
+#define NUM_BATCH	8	// mimber of batches per thread block
 
 __constant__ int   faces[27] = {0,0,0,0,1,0,0,0,0,  0,1,0,1,0,1,0,1,0,  0,0,0,0,1,0,0,0,0};
 __constant__ int   edges[27] = {0,1,0,1,0,1,0,1,0,  1,0,1,0,0,0,1,0,1,  0,1,0,1,0,1,0,1,0};
 __constant__ int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
-
+template <int log_dim, int num_batch, int batch_size>
 __global__ void apply_BCs_v1_kernel(level_type level, int x_id, int shape){
-  // For cell-centered, we need to fill in the ghost zones to apply any BC's
-  // This code does a simple piecewise linear interpolation for homogeneous dirichlet (0 on boundary)
-  // Nominally, this is first performed across faces, then to edges, then to corners.  
-  // In this implementation, these three steps are fused
-  //
-  //   . . . . . . . . . .        . . . . . . . . . .
-  //   .       .       .          .       .       .
-  //   .   ?   .   ?   .          .+x(0,0).-x(0,0).
-  //   .       .       .          .       .       .
-  //   . . . . +---0---+--        . . . . +-------+--
-  //   .       |       |          .       |       |
-  //   .   ?   0 x(0,0)|          .-x(0,0)| x(0,0)|
-  //   .       |       |          .       |       |
-  //   . . . . +-------+--        . . . . +-------+--
-  //   .       |       |          .       |       |
-  //
-  //
+  // thread exit conditions
+  int batchid = blockIdx.x*num_batch + threadIdx.x/batch_size;
+  if(batchid >= level.boundary_condition.num_blocks[shape]) return;
 
-  int bid = blockIdx.x*APPLY_BCS_LINEAR_NUM_GROUPS + threadIdx.x/APPLY_BCS_LINEAR_GROUP_SIZE;
-  //if(blockIdx.x<2){printf("%d\t%d\t%d\n",blockIdx.x,threadIdx.x,bid);}
-  if(bid >= level.boundary_condition.num_blocks[shape]) return;
-
-  // load current block
-  blockCopy_type block = level.boundary_condition.blocks[shape][bid];
+  // one CUDA thread block operates on 'batch_size' HPGMG tiles/blocks
+  blockCopy_type block = level.boundary_condition.blocks[shape][batchid];
 
   double scale = 1.0;
   if(  faces[block.subtype])scale=-1.0;
@@ -89,47 +69,26 @@ __global__ void apply_BCs_v1_kernel(level_type level, int x_id, int shape){
   const int dk = (((normal / 9)  )-1);
   const int stride = di + dj*jStride + dk*kStride;
 
-/*
-  if(dim_i==1){
-    for(int gid=threadIdx.x%APPLY_BCS_LINEAR_GROUP_SIZE; gid<dim_j*dim_k; gid+=APPLY_BCS_LINEAR_GROUP_SIZE){
-      k=gid/dim_j;
-      j=gid%dim_j;
-      int ijk = (  ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-      x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
-    }
-  }else if(dim_j==1){
-    for(int gid=threadIdx.x%APPLY_BCS_LINEAR_GROUP_SIZE; gid<dim_i*dim_k; gid+=APPLY_BCS_LINEAR_GROUP_SIZE){
-      k=gid/dim_i;
-      i=gid%dim_i;
-      int ijk = (i+ilo) + (  jlo)*jStride + (k+klo)*kStride;
-      x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
-    }
-  }else if(dim_k==1){
-    for(int gid=threadIdx.x%APPLY_BCS_LINEAR_GROUP_SIZE; gid<dim_i*dim_j; gid+=APPLY_BCS_LINEAR_GROUP_SIZE){
-      j=gid/dim_i;
-      i=gid%dim_i;
-      int ijk = (i+ilo) + (j+jlo)*jStride + (  klo)*kStride;
-      x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
-    }
-  }else{
-*/
-    for(int gid=threadIdx.x%APPLY_BCS_LINEAR_GROUP_SIZE; gid<dim_i*dim_j*dim_k; gid+=APPLY_BCS_LINEAR_GROUP_SIZE){
-      k=(gid/dim_i)/dim_j;
-      j=(gid/dim_i)%dim_j;
-      i=gid%dim_i;
-      int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
-      x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
-      //x[ijk] = scale * __ldg(x + ijk + stride);
-    }
-  //}
+  for(int gid=threadIdx.x%batch_size; gid<dim_i*dim_j*dim_k; gid+=batch_size){
+    k=(gid/dim_i)/dim_j;
+    j=(gid/dim_i)%dim_j;
+    i=gid%dim_i;
+    int ijk = (i+ilo) + (j+jlo)*jStride + (k+klo)*kStride;
+    x[ijk] = scale*x[ijk+stride]; // homogeneous linear = 1pt stencil
+  }
 }
+#undef  KERNEL
+#define KERNEL(log_dim, shape) \
+  apply_BCs_v1_kernel<log_dim,NUM_BATCH,(BLOCK_SIZE/NUM_BATCH)><<<grid,block>>>(level,x_id,shape);
 
 extern "C"
 void cuda_apply_BCs_v1(level_type level, int x_id, int shape)
 {
-  int block = APPLY_BCS_LINEAR_BLOCK_SIZE;
-  int grid = (level.boundary_condition.num_blocks[shape]+APPLY_BCS_LINEAR_NUM_GROUPS-1)/APPLY_BCS_LINEAR_NUM_GROUPS;
+  int block = BLOCK_SIZE;
+  int grid = (level.boundary_condition.num_blocks[shape]+NUM_BATCH-1)/NUM_BATCH;
   if (grid <= 0) return;
 
-  apply_BCs_v1_kernel<<<grid, block>>>(level, x_id, shape);
+  int log_dim = (int)log2((double)level.dim.i); 
+  KERNEL_LEVEL(log_dim, shape);
+  CUDA_ERROR
 }

@@ -25,11 +25,12 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
+#define COPY_THREAD_BLOCK_SIZE			64
+#define INCREMENT_THREAD_BLOCK_SIZE		64
 
-#define COPY_THREAD_BLOCK_SIZE			128
-#define INCREMENT_THREAD_BLOCK_SIZE		128
+#define READ(i)	__ldg(&read[i])
 
-template<int block_type>
+template<int log_dim, int block_type>
 __global__ void copy_block_kernel(level_type level, int id, communicator_type exchange_ghosts)
 {
   // one CUDA thread block operates on one HPGMG tile/block
@@ -62,23 +63,19 @@ __global__ void copy_block_kernel(level_type level, int id, communicator_type ex
   if(write_box>=0)
     write = level.my_boxes[write_box].vectors[id] + level.my_boxes[write_box].ghosts*(1+level.my_boxes[write_box].jStride+level.my_boxes[write_box].kStride);
 
-  int linear_id = threadIdx.x;
-  while(linear_id < dim_i*dim_j*dim_k) 
-  {
+  for(int gid=threadIdx.x;gid<dim_i*dim_j*dim_k;gid+=blockDim.x){
     // simple linear mapping of 1D threads to 3D indices
-    int k = (linear_id / dim_i) / dim_j;
-    int j = (linear_id / dim_i) % dim_j;
-    int i = linear_id % dim_i;
+    int k=(gid/dim_i)/dim_j;
+    int j=(gid/dim_i)%dim_j;
+    int i=gid%dim_i;
 
     int  read_ijk = (i+ read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
     int write_ijk = (i+write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
-    write[write_ijk] = read[read_ijk];
-
-    linear_id += blockDim.x;
+    write[write_ijk] = READ(read_ijk);
   }
 }
 
-template<int block_type>
+template<int log_dim, int block_type>
 __global__ void increment_block_kernel(level_type level, int id, double prescale, communicator_type exchange_ghosts)
 {
   // one CUDA thread block operates on one HPGMG tile/block
@@ -115,51 +112,51 @@ __global__ void increment_block_kernel(level_type level, int id, double prescale
     write_kStride = level.my_boxes[block.write.box].kStride;
   }
 
-  int linear_id = threadIdx.x;
-  while(linear_id < dim_i*dim_j*dim_k)
-  {
+  for(int gid=threadIdx.x;gid<dim_i*dim_j*dim_k;gid+=blockDim.x){
     // simple linear mapping of 1D threads to 3D indices
-    int k = (linear_id / dim_i) / dim_j;
-    int j = (linear_id / dim_i) % dim_j;
-    int i = linear_id % dim_i;
+    int k=(gid/dim_i)/dim_j;
+    int j=(gid/dim_i)%dim_j;
+    int i=gid%dim_i;
 
     int  read_ijk = (i+ read_i) + (j+ read_j)* read_jStride + (k+ read_k)* read_kStride;
     int write_ijk = (i+write_i) + (j+write_j)*write_jStride + (k+write_k)*write_kStride;
-    write[write_ijk] = prescale*write[write_ijk] + read[read_ijk]; 
-
-    linear_id += blockDim.x;
+    write[write_ijk] = prescale*write[write_ijk] + READ(read_ijk);
   }
 }
+#undef  KERNEL
+#define KERNEL(log_dim, block_type) \
+  copy_block_kernel<log_dim,block_type><<<grid,block>>>(level,id,exchange_ghosts);
 
 extern "C"
-void cuda_copy_block(level_type d_level, int id, communicator_type exchange_ghosts, int block_type)
+void cuda_copy_block(level_type level, int id, communicator_type exchange_ghosts, int block_type)
 {
   int block = COPY_THREAD_BLOCK_SIZE;
-  int grid = exchange_ghosts.num_blocks[block_type];
+  int grid = exchange_ghosts.num_blocks[block_type]; if(grid<=0) return;
 
-  if (grid > 0) {
-    switch (block_type) {
-      case 0: copy_block_kernel<0><<<grid, block>>>(d_level, id, exchange_ghosts); break;
-      case 1: copy_block_kernel<1><<<grid, block>>>(d_level, id, exchange_ghosts); break;
-      case 2: copy_block_kernel<2><<<grid, block>>>(d_level, id, exchange_ghosts); break;
-      default: printf("CUDA block copy error: incorrect block_type = %i\n", block_type);
-    }
-  }
-} 
-
-extern "C"
-void cuda_increment_block(level_type d_level, int id, double prescale, communicator_type exchange_ghosts, int block_type)
-{
-  int block = INCREMENT_THREAD_BLOCK_SIZE;
-  int grid = exchange_ghosts.num_blocks[block_type];
-
-  if (grid > 0) {
-    switch (block_type) {
-      case 0: increment_block_kernel<0><<<grid, block>>>(d_level, id, prescale, exchange_ghosts); break;
-      case 1: increment_block_kernel<1><<<grid, block>>>(d_level, id, prescale, exchange_ghosts); break;
-      case 2: increment_block_kernel<2><<<grid, block>>>(d_level, id, prescale, exchange_ghosts); break;
-      default: printf("CUDA block increment error: incorrect block_type = %i\n", block_type);
-    }
+  int log_dim = (int)log2((double)level.dim.i);
+  switch(block_type){
+    case 0: KERNEL_LEVEL(log_dim,0); CUDA_ERROR break;
+    case 1: KERNEL_LEVEL(log_dim,1); CUDA_ERROR break;
+    case 2: KERNEL_LEVEL(log_dim,2); CUDA_ERROR break;
+    default: printf("CUDA ERROR: incorrect block type, %i\n", block_type);
   }
 }
 
+#undef  KERNEL
+#define KERNEL(log_dim, block_type) \
+  increment_block_kernel<log_dim,block_type><<<grid,block>>>(level,id,prescale,exchange_ghosts);
+
+extern "C"
+void cuda_increment_block(level_type level, int id, double prescale, communicator_type exchange_ghosts, int block_type)
+{
+  int block = INCREMENT_THREAD_BLOCK_SIZE;
+  int grid = exchange_ghosts.num_blocks[block_type]; if(grid<=0) return;
+
+  int log_dim = (int)log2((double)level.dim.i);
+  switch(block_type){
+    case 0: KERNEL_LEVEL(log_dim,0); CUDA_ERROR break;
+    case 1: KERNEL_LEVEL(log_dim,1); CUDA_ERROR break;
+    case 2: KERNEL_LEVEL(log_dim,2); CUDA_ERROR break;
+    default: printf("CUDA ERROR: incorrect block type, %i\n", block_type);
+  }
+}

@@ -27,9 +27,7 @@
 */
 
 // available device functions
-void cuda_cheby_smooth(level_type d_level, int x_id, int rhs_id, double a, double b, int s, double *d_chebyshev_c1, double *d_chebyshev_c2);
-void cuda_gsrb_smooth(level_type d_level, int phi_id, int rhs_id, double a, double b, int s);
-
+void cuda_smooth(level_type level, int x_id, int rhs_id, double a, double b, int s, double *c, double *d);
 void cuda_residual(level_type d_level, int res_id, int x_id, int rhs_id, double a, double b);
 
 void cuda_restriction(level_type d_level_c, int id_c, level_type d_level_f, int id_f, communicator_type restriction, int restrictionType, int block_type);
@@ -37,9 +35,12 @@ void cuda_restriction(level_type d_level_c, int id_c, level_type d_level_f, int 
 void cuda_interpolation_p0(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type);
 void cuda_interpolation_p1(level_type d_level_f, int id_f, double prescale_f, level_type d_level_c, int id_c, communicator_type interpolation, int block_type);
 void cuda_interpolation_v2(level_type level_f, int id_f, double prescale_f, level_type level_c, int id_c, communicator_type interpolation, int block_type);
+void cuda_interpolation_v4(level_type level_f, int id_f, double prescale_f, level_type level_c, int id_c, communicator_type interpolation, int block_type);
 
 void cuda_apply_BCs_v1(level_type level, int x_id, int shape);
 void cuda_apply_BCs_v2(level_type level, int x_id, int shape);
+void cuda_apply_BCs_v4(level_type level, int x_id, int shape);
+void cuda_extrapolate_betas(level_type level, int shape);
 
 void cuda_zero_vector(level_type d_level, int id);
 void cuda_scale_vector(level_type d_level, int id_c, double scale_a, int id_a);
@@ -52,4 +53,4 @@ double cuda_max_abs(level_type d_level, int id);
 void cuda_copy_block(level_type d_level, int id, communicator_type exchange_ghosts, int block_type);
 void cuda_increment_block(level_type d_level, int id, double prescale, communicator_type exchange_ghosts, int block_type);
 
-#include "nvtx.h"
+#include "extra.h"

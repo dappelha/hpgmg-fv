@@ -64,7 +64,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
     uint64_t _timeStart = CycleTime();
 
     if (level->use_cuda) {
-      cuda_cheby_smooth(*level, x_id, rhs_id, a, b, s, level->chebyshev_c1, level->chebyshev_c2);
+      cuda_smooth(*level, x_id, rhs_id, a, b, s, level->chebyshev_c1, level->chebyshev_c2);
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)

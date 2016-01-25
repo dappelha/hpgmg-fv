@@ -26,18 +26,24 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#define RESTRICTION_THREAD_BLOCK_SIZE		256
+#undef  READ
+#define READ(i)	__ldg(&read[i])
 
-template<int block_type, int restrictionType>
+template<int log_dim, int block_type, int restrictionType>
 __global__ void restriction_kernel(level_type level_c, int id_c, level_type level_f, int id_f, communicator_type restriction)
 {
   // load current block
-  blockCopy_type block = restriction.blocks[block_type][blockIdx.x];
+  blockCopy_type block = restriction.blocks[block_type][blockIdx.z];
 
   // restrict 3D array from read_i,j,k of read[] to write_i,j,k in write[]
   int   dim_i       = block.dim.i; // calculate the dimensions of the resultant coarse block
   int   dim_j       = block.dim.j;
   int   dim_k       = block.dim.k;
+
+  // thread exit conditions
+  int i = (blockIdx.x*blockDim.x + threadIdx.x);
+  int j = (blockIdx.y*blockDim.y + threadIdx.y);
+  if(i>=dim_i || j>=dim_j) return;
 
   int  read_i       = block.read.i;
   int  read_j       = block.read.j;
@@ -65,82 +71,89 @@ __global__ void restriction_kernel(level_type level_c, int id_c, level_type leve
     write_kStride = level_c.my_boxes[block.write.box].kStride;
   }
 
-  int i = threadIdx.x % dim_i;
-  int j_block_stride = RESTRICTION_THREAD_BLOCK_SIZE / dim_i;
-
   switch(restrictionType){
     case RESTRICT_CELL:
-         for (int j = threadIdx.x / dim_i; j < dim_j; j += j_block_stride)
-         for (int k = 0; k < dim_k; k++) {
+         for(int k=0;k<dim_k;k++){
            int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
            int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
-           write[write_ijk] = ( read[read_ijk                            ]+read[read_ijk+1                          ] +
-                                read[read_ijk  +read_jStride             ]+read[read_ijk+1+read_jStride             ] +
-                                read[read_ijk               +read_kStride]+read[read_ijk+1             +read_kStride] +
-                                read[read_ijk  +read_jStride+read_kStride]+read[read_ijk+1+read_jStride+read_kStride] ) * 0.125;
+	   double r11 = READ(read_ijk                            );
+	   double r12 = READ(read_ijk+1                          );
+	   double r21 = READ(read_ijk  +read_jStride             );
+	   double r22 = READ(read_ijk+1+read_jStride             );
+	   double r31 = READ(read_ijk               +read_kStride);
+	   double r32 = READ(read_ijk+1             +read_kStride);
+	   double r41 = READ(read_ijk  +read_jStride+read_kStride);
+	   double r42 = READ(read_ijk+1+read_jStride+read_kStride);
+	   write[write_ijk] = ( r11+r12 + r21+r22 + r31+r32 + r41+r42 ) * 0.125;
+           /*write[write_ijk] = ( READ(read_ijk                            )+READ(read_ijk+1                          ) +
+                                READ(read_ijk  +read_jStride             )+READ(read_ijk+1+read_jStride             ) +
+                                READ(read_ijk               +read_kStride)+READ(read_ijk+1             +read_kStride) +
+                                READ(read_ijk  +read_jStride+read_kStride)+READ(read_ijk+1+read_jStride+read_kStride) ) * 0.125;*/
          }break;
     case RESTRICT_FACE_I:
-         for (int j = threadIdx.x / dim_i; j < dim_j; j += j_block_stride)
-         for (int k = 0; k < dim_k; k++) {
+	 for(int k=0;k<dim_k;k++){
            int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
            int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
-           write[write_ijk] = ( read[read_ijk                          ] +
-                                read[read_ijk+read_jStride             ] +
-                                read[read_ijk             +read_kStride] +
-                                read[read_ijk+read_jStride+read_kStride] ) * 0.25;
+	   double r1 = READ(read_ijk                          );
+	   double r2 = READ(read_ijk+read_jStride             );
+	   double r3 = READ(read_ijk             +read_kStride);
+	   double r4 = READ(read_ijk+read_jStride+read_kStride);
+           write[write_ijk] = ( r1 + r2 + r3 + r4 ) * 0.25;
+           /*write[write_ijk] = ( READ(read_ijk                          ) +
+                                READ(read_ijk+read_jStride             ) +
+                                READ(read_ijk             +read_kStride) +
+                                READ(read_ijk+read_jStride+read_kStride) ) * 0.25;*/
          }break;
     case RESTRICT_FACE_J:
-         for (int j = threadIdx.x / dim_i; j < dim_j; j += j_block_stride)
-         for (int k = 0; k < dim_k; k++) {
+	 for(int k=0;k<dim_k;k++){
            int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
            int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
-           write[write_ijk] = ( read[read_ijk               ] +
-                                read[read_ijk+1             ] +
-                                read[read_ijk  +read_kStride] +
-                                read[read_ijk+1+read_kStride] ) * 0.25;
+  	   double r1 = READ(read_ijk               );
+	   double r2 = READ(read_ijk+1             );
+	   double r3 = READ(read_ijk  +read_kStride);
+	   double r4 = READ(read_ijk+1+read_kStride);
+	   write[write_ijk] = ( r1 + r2 + r3 + r4 ) * 0.25;
+           /*write[write_ijk] = ( READ(read_ijk               ) +
+                                READ(read_ijk+1             ) +
+                                READ(read_ijk  +read_kStride) +
+                                READ(read_ijk+1+read_kStride) ) * 0.25;*/
          }break;
     case RESTRICT_FACE_K:
-         for (int j = threadIdx.x / dim_i; j < dim_j; j += j_block_stride)
-         for (int k = 0; k < dim_k; k++) {
+	 for(int k=0;k<dim_k;k++){
            int write_ijk = ((i   )+write_i) + ((j   )+write_j)*write_jStride + ((k   )+write_k)*write_kStride;
            int  read_ijk = ((i<<1)+ read_i) + ((j<<1)+ read_j)* read_jStride + ((k<<1)+ read_k)* read_kStride;
-           write[write_ijk] = ( read[read_ijk               ] +
-                                read[read_ijk+1             ] +
-                                read[read_ijk  +read_jStride] +
-                                read[read_ijk+1+read_jStride] ) * 0.25;
+	   double r1 = READ(read_ijk               );
+	   double r2 = READ(read_ijk+1             );
+	   double r3 = READ(read_ijk  +read_jStride);
+	   double r4 = READ(read_ijk+1+read_jStride);
+	   write[write_ijk] = ( r1 + r2 + r3 + r4 ) * 0.25;
+           /*write[write_ijk] = ( READ(read_ijk               ) +
+                                READ(read_ijk+1             ) +
+                                READ(read_ijk  +read_jStride) +
+                                READ(read_ijk+1+read_jStride) ) * 0.25;*/
          }break;
   }
 }
+#undef  KERNEL
+#define KERNEL(log_dim, block_type) \
+  switch(restrictionType){ \
+  case RESTRICT_CELL:   restriction_kernel<log_dim,block_type,RESTRICT_CELL  ><<<grid,block>>>(level_c,id_c,level_f,id_f,restriction); CUDA_ERROR break; \
+  case RESTRICT_FACE_I: restriction_kernel<log_dim,block_type,RESTRICT_FACE_I><<<grid,block>>>(level_c,id_c,level_f,id_f,restriction); CUDA_ERROR break; \
+  case RESTRICT_FACE_J: restriction_kernel<log_dim,block_type,RESTRICT_FACE_J><<<grid,block>>>(level_c,id_c,level_f,id_f,restriction); CUDA_ERROR break; \
+  case RESTRICT_FACE_K: restriction_kernel<log_dim,block_type,RESTRICT_FACE_K><<<grid,block>>>(level_c,id_c,level_f,id_f,restriction); CUDA_ERROR break; \
+  default: printf("CUDA ERROR: incorrect restriction type, %i\n", restrictionType);}
 
 extern "C"
-void cuda_restriction(level_type d_level_c, int id_c, level_type d_level_f, int id_f, communicator_type restriction, int restrictionType, int block_type)
+void cuda_restriction(level_type level_c, int id_c, level_type level_f, int id_f, communicator_type restriction, int restrictionType, int block_type)
 {
-  int block = RESTRICTION_THREAD_BLOCK_SIZE;
-  int grid = restriction.num_blocks[block_type];
+  int num_blocks = restriction.num_blocks[block_type]; if(num_blocks<=0) return;
+  dim3 block = dim3(min(level_c.box_dim,BLOCKCOPY_TILE_I), BLOCKCOPY_TILE_J, 1);
+  dim3 grid = dim3((restriction.blocks[block_type][0].dim.i+block.x-1)/block.x,(restriction.blocks[block_type][0].dim.j+block.y-1)/block.y,num_blocks);
 
-  if (grid > 0) {
-    switch (block_type) {
-      case 0: {
-	switch(restrictionType) {
-	case RESTRICT_CELL: restriction_kernel<0, RESTRICT_CELL><<<grid, block>>>(d_level_c, id_c, d_level_f, id_f, restriction); break;
-	case RESTRICT_FACE_I: restriction_kernel<0, RESTRICT_FACE_I><<<grid, block>>>(d_level_c, id_c, d_level_f, id_f, restriction); break;
-	case RESTRICT_FACE_J: restriction_kernel<0, RESTRICT_FACE_J><<<grid, block>>>(d_level_c, id_c, d_level_f, id_f, restriction); break;
-	case RESTRICT_FACE_K: restriction_kernel<0, RESTRICT_FACE_K><<<grid, block>>>(d_level_c, id_c, d_level_f, id_f, restriction); break;
-        default: printf("CUDA restriction error: incorrect restrictionType = %i\n", block_type);
-        }
-        break;
-      }
-      case 1: {
-	switch(restrictionType) {
-	case RESTRICT_CELL: restriction_kernel<1, RESTRICT_CELL><<<grid, block>>>(d_level_c, id_c, d_level_f, id_f, restriction); break;
-	case RESTRICT_FACE_I: restriction_kernel<1, RESTRICT_FACE_I><<<grid, block>>>(d_level_c, id_c, d_level_f, id_f, restriction); break;
-	case RESTRICT_FACE_J: restriction_kernel<1, RESTRICT_FACE_J><<<grid, block>>>(d_level_c, id_c, d_level_f, id_f, restriction); break;
-	case RESTRICT_FACE_K: restriction_kernel<1, RESTRICT_FACE_K><<<grid, block>>>(d_level_c, id_c, d_level_f, id_f, restriction); break;
-        default: printf("CUDA restriction error: incorrect restrictionType = %i\n", block_type);
-        }
-        break;
-      }
-      default: printf("CUDA restriction error: incorrect block_type = %i\n", block_type);
-    }
+  int log_dim = (int)log2((double)level_c.dim.i);
+  switch(block_type){
+    case 0: KERNEL_LEVEL(log_dim, 0); break;
+    case 1: KERNEL_LEVEL(log_dim, 1); break;
+    default: printf("CUDA ERROR: incorrect block type, %i\n", block_type);
   }
-} 
+}

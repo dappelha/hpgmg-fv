@@ -54,16 +54,18 @@ int cudaCheckPeerToPeer(int rank){
 
   // query number of GPU devices in the system
   cudaGetDeviceCount(&ndev);
-  //printf("rank %d:  Number of visible GPUs:  %d\n",rank,ndev); // Too verbose at scale
+  // print only for 10 first ranks
+  if (rank < 10) printf("rank %d:  Number of visible GPUs:  %d\n",rank,ndev); // Too verbose at scale
 
-  // Print device properties
-  /*for(int i=0;i<ndev;i++){
+  // print device properties, only for rank 0
+  for(int i=0;i<ndev;i++) {
     struct cudaDeviceProp devProp;
     cudaGetDeviceProperties(&devProp,i);
-    printf("rank %d:  name = %s, global memory = %u\n",rank,devProp.name,devProp.totalGlobalMem);
-  }*/
+    if (rank < 1) printf("rank %d:  GPU%d name %s\n",rank,i,devProp.name);
+  }
 
-  // Check for peer to peer mappings
+  // check for peer to peer mappings
+  // print only for rank 0
   for(int i=0;i<ndev;i++)
   for(int j=i+1;j<ndev;j++){
     struct cudaDeviceProp devPropi,devPropj;
@@ -71,7 +73,7 @@ int cudaCheckPeerToPeer(int rank){
     cudaGetDeviceProperties(&devPropj,j);
 
     cudaDeviceCanAccessPeer(&peer,i,j);
-    //printf("rank %d:  Peer access from %s (GPU%d) -> %s (GPU%d) : %s\n",rank,devPropi.name,i,devPropj.name,j,peer?"Yes":"No"); // Too verbose at scale
+    if (rank < 1) printf("rank %d:  Peer access from %s (GPU%d) -> %s (GPU%d) : %s\n",rank,devPropi.name,i,devPropj.name,j,peer?"Yes":"No"); // Too verbose at scale
   }
   return ndev;
 }
@@ -170,6 +172,12 @@ int main(int argc, char **argv){
   // Set CUDA device for this rank...
   num_devices = cudaCheckPeerToPeer(my_rank);
   cudaSetDevice(my_rank % num_devices);
+  #ifdef USE_SHM
+  cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
+  cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
+  #else
+  cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+  #endif
 //if(actual_threading_model>requested_threading_model)actual_threading_model=requested_threading_model;
   if(my_rank==0){
        if(requested_threading_model == MPI_THREAD_MULTIPLE  )fprintf(stdout,"Requested MPI_THREAD_MULTIPLE, ");

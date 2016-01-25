@@ -25,7 +25,10 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
     // apply the smoother... Jacobi ping pongs between x_id and VECTOR_TEMP
     uint64_t _timeStart = CycleTime();
-
+    if (level->use_cuda) {
+      cuda_smooth(*level, x_id, rhs_id, a, b, s, NULL, NULL);
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
     for(block=0;block<level->num_my_blocks;block++){
       const int box = level->my_blocks[block].read.box;
@@ -67,6 +70,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
       }}}
 
     } // box-loop
+    } // use-cuda
     level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
   } // s-loop
 }

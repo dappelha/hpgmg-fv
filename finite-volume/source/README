@@ -69,19 +69,23 @@ New options:
 -DMAX_SOLVES			// controls maximum number of solves after warm-up
 -DCUDA_UM_ALLOC			// use custom Unified Memory allocator instead of malloc (this is required to work properly)
 -DCUDA_UM_ZERO_COPY		// use zero-copy mapped memory for boundary levels to avoid unnecessary migration
--DCUDA_UM_HOST_ATTACH		// use host attach Unified Memory option for host levels to avoid unnecessary migration
--DCUDA_STENCIL_OPT_TEX		// enable stencil optimization kernels that use LDG for memory access (only for Chebyshev)
+-DUSE_ERROR			// enforce device synchronization and error checking for CUDA calls (recommended for debugging)
+
+Optimizations:
+
+-DUSE_REG			// use register optimizations
+-DUSE_TEX			// use read-only/texture cache for memory access
+-DUSE_SHM			// enables shared memory (disabled by default) 
 
 Currently some macros are required for the GPU implementation to work properly,
 such as CUDA_UM_ALLOC and BLOCKCOPY_TILE_I.  Others are optional but strongly
 recommended for best performance: HOST_LEVEL_SIZE_THRESHOLD, CUDA_UM_ALLOC,
-CUDA_UM_ZERO_COPY, CUDA_UM_HOST_ATTACH and CUDA_STENCIL_OPT_TEX.  All CUDA
-kernels are located in [cuda/](cuda/) folder and filenames usually match
-corresponding CPU functionality, i.e. for the Chebyshev smoother the GPU
-implementation can be found in [cuda/chebyshev.h](cuda/chebyshev.h), while CPU
-code is available in [operators/chebyshev.c](operators/chebyshev.c). The GPU
-code is tested on single node with one, two and four GPUs using CUDA-aware
-MVAPICH 2.1 and OpenMPI 1.8.7 with CUDA 7.
+CUDA_UM_ZERO_COPY, USE_REG and USE_TEX.  All CUDA kernels are located in
+[cuda/](cuda/) folder and filenames usually match corresponding CPU
+functionality.  4-th order scheme is enabled by default, if you wish to change
+to the old 2nd order scheme: replace operators.fv4.* with operators.fv2.* in
+local.mk and recompile.  The GPU code is tested on single node with one, two
+and four GPUs using CUDA-aware MVAPICH 2.1 and OpenMPI 1.8.7 with CUDA 7.
 
 GPU performance tuning
 ===================

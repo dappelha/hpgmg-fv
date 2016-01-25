@@ -297,10 +297,16 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
   // pack MPI send buffers...
   if(level_c->interpolation.num_blocks[0]>0){
     _timeStart = CycleTime();
+    if(level_c->use_cuda) {
+      cuda_interpolation_v4(*level_f,id_f,0.0,*level_c,id_c,level_c->interpolation,0);
+      cudaDeviceSynchronize();
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[0])
     for(buffer=0;buffer<level_c->interpolation.num_blocks[0];buffer++){
       // !!! prescale==0 because you don't want to increment the MPI buffer
       interpolation_v4_block(level_f,id_f,0.0,level_c,id_c,&level_c->interpolation.blocks[0][buffer]);
+    }
     }
     _timeEnd = CycleTime();
     level_f->cycles.interpolation_pack += (_timeEnd-_timeStart);
@@ -332,9 +338,15 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
   // perform local interpolation... try and hide within Isend latency... 
   if(level_c->interpolation.num_blocks[1]>0){
     _timeStart = CycleTime();
+    if(level_f->use_cuda){
+      cuda_interpolation_v4(*level_f,id_f,prescale_f,*level_c,id_c,level_c->interpolation,1);
+      cudaDeviceSynchronize();
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[1])
     for(buffer=0;buffer<level_c->interpolation.num_blocks[1];buffer++){
       interpolation_v4_block(level_f,id_f,prescale_f,level_c,id_c,&level_c->interpolation.blocks[1][buffer]);
+    }
     }
     _timeEnd = CycleTime();
     level_f->cycles.interpolation_local += (_timeEnd-_timeStart);
@@ -354,9 +366,14 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
   // unpack MPI receive buffers 
   if(level_f->interpolation.num_blocks[2]>0){
     _timeStart = CycleTime();
+    if(level_f->use_cuda) {
+      cuda_increment_block(*level_f,id_f,prescale_f,level_f->interpolation,2);
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->interpolation.num_blocks[2])
     for(buffer=0;buffer<level_f->interpolation.num_blocks[2];buffer++){
       IncrementBlock(level_f,id_f,prescale_f,&level_f->interpolation.blocks[2][buffer]);
+    }
     }
     _timeEnd = CycleTime();
     level_f->cycles.interpolation_unpack += (_timeEnd-_timeStart);

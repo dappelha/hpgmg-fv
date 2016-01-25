@@ -17,6 +17,7 @@
 #include "defines.h"
 #include "level.h"
 #include "operators.h"
+#include "cuda/common.h"
 //------------------------------------------------------------------------------------------------------------------------------
 #define STENCIL_VARIABLE_COEFFICIENT
 //------------------------------------------------------------------------------------------------------------------------------
@@ -178,7 +179,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
 #define NUM_SMOOTHS      3 // RBRBRB
 #include "operators/gsrb.c"
 #elif   USE_CHEBY
-#warning The Chebyshev smoother is currently underperforming for 4th order.  Please use -DUSE_GSRB or -DUSE_JACOBI
+//#warning The Chebyshev smoother is currently underperforming for 4th order.  Please use -DUSE_GSRB or -DUSE_JACOBI
 #define NUM_SMOOTHS      1
 #define CHEBYSHEV_DEGREE 6 // i.e. one degree-6 polynomial smoother
 #include "operators/chebyshev.c"

@@ -37,7 +37,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
     uint64_t _timeStart = CycleTime();
 
     if (level->use_cuda) {
-      cuda_gsrb_smooth(*level, x_id, rhs_id, a, b, s);
+      cuda_smooth(*level, x_id, rhs_id, a, b, s, NULL, NULL);
     }
     else {
     // loop over all block/tiles this process owns...
