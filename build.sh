@@ -32,11 +32,7 @@ OPTS+="-DUSE_REG "
 OPTS+="-DUSE_TEX "
 #OPTS+="-DUSE_SHM "
 
-# smoother
-OPTS+="-DUSE_CHEBY "
-#OPTS+="-DUSE_JACOBI "
-#OPTS+="-DUSE_L1JACOBI "
-#OPTS+="-DUSE_GSRB "
+# GSRB smoother options
 #OPTS+="-DGSRB_FP "
 #OPTS+="-DGSRB_STRIDE2 "
 #OPTS+="-DGSRB_BRANCH "
@@ -51,7 +47,11 @@ OPTS+="-DUSE_CHEBY "
 OPTS+="-DMPICH_IGNORE_CXX_SEEK "
 OPTS+="-DMPICH_SKIP_MPICXX "
 
+# GSRB smoother (default)
 ./configure --CC=$CC --NVCC=$NVCC --CFLAGS="-O2 -fopenmp $OPTS" --NVCCFLAGS="-O2 -lineinfo -lnvToolsExt $OPTS" --CUDAARCH="$CUDA_ARCH" --no-fe
+
+# Chebyshev smoother
+#./configure --CC=$CC --NVCC=$NVCC --CFLAGS="-O2 -fopenmp $OPTS" --NVCCFLAGS="-O2 -lineinfo -lnvToolsExt $OPTS" --CUDAARCH="$CUDA_ARCH" --fv-smoother="cheby" --no-fe
 
 make clean -C build
 make -j3 -C build

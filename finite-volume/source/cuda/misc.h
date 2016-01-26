@@ -138,6 +138,42 @@ __global__ void axpy_vector_kernel(level_type level, int id_c, double scale_a, d
       }
 }
 
+// simple coloring kernel, see misc.c for details
+__global__ void color_vector_kernel(level_type level, int id_a, int colors_in_each_dim, int icolor, int jcolor, int kcolor)
+{
+  int block = blockIdx.x;
+
+    const int box = level.my_blocks[block].read.box;
+          int ilo = level.my_blocks[block].read.i;
+          int jlo = level.my_blocks[block].read.j;
+          int klo = level.my_blocks[block].read.k;
+          int ihi = level.my_blocks[block].dim.i + ilo;
+          int jhi = level.my_blocks[block].dim.j + jlo;
+          int khi = level.my_blocks[block].dim.k + klo;
+    const int boxlowi = level.my_boxes[box].low.i;
+    const int boxlowj = level.my_boxes[box].low.j;
+    const int boxlowk = level.my_boxes[box].low.k;
+    const int jStride = level.my_boxes[box].jStride;
+    const int kStride = level.my_boxes[box].kStride;
+    const int  ghosts = level.my_boxes[box].ghosts;
+    double * __restrict__ grid = level.my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride);
+
+    int dim_i = (ihi - ilo);
+    int i = ilo + threadIdx.x % dim_i;
+    if (i >= ihi) return;
+
+    int j_block_stride = MISC_THREAD_BLOCK_SIZE / dim_i;
+
+    for (int j = jlo + threadIdx.x / dim_i; j < jhi; j += j_block_stride)
+      for (int k = klo; k < khi; k++) {
+        double sk=0.0;if( ((k+boxlowk+kcolor)%colors_in_each_dim) == 0 )sk=1.0; // if colors_in_each_dim==1 (don't color), all cells are set to 1.0
+        double sj=0.0;if( ((j+boxlowj+jcolor)%colors_in_each_dim) == 0 )sj=1.0;
+        double si=0.0;if( ((i+boxlowi+icolor)%colors_in_each_dim) == 0 )si=1.0;
+        const int ijk = i + j*jStride + k*kStride;
+        grid[ijk] = si*sj*sk;
+      }
+}
+
 // 0: summation, 1: maximum absolute
 template <int red_type>
 __global__ void reduction_kernel(level_type level, int id, double *res)
@@ -290,3 +326,15 @@ double cuda_max_abs(level_type d_level, int id)
   CUDA_API_ERROR( cudaFree(d_res) )
   return h_res[0];
 }
+
+extern "C"
+void cuda_color_vector(level_type d_level, int id_a, int colors_in_each_dim, int icolor, int jcolor, int kcolor)
+{
+  int block = MISC_THREAD_BLOCK_SIZE;
+  int grid = d_level.num_my_blocks;
+  if (grid <= 0) return;
+
+  color_vector_kernel<<<grid, block>>>(d_level, id_a, colors_in_each_dim, icolor, jcolor, kcolor);
+  CUDA_ERROR
+}
+

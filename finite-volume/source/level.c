@@ -1427,13 +1427,13 @@ void destroy_level(level_type *level){
   // ghost zone exchange mini programs...
   for(i=0;i<STENCIL_MAX_SHAPES;i++){
     if(level->exchange_ghosts[i].num_recvs>0){
-    for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])um_free(level->exchange_ghosts[i].recv_buffers[j], level->um_access_policy);
+    for(j=0;j<level->exchange_ghosts[i].num_recvs;j++)if(level->exchange_ghosts[i].recv_buffers[j])um_free(level->exchange_ghosts[i].recv_buffers[j], UM_ACCESS_BOTH);
     if(level->exchange_ghosts[i].recv_buffers)free(level->exchange_ghosts[i].recv_buffers);
     if(level->exchange_ghosts[i].recv_ranks  )free(level->exchange_ghosts[i].recv_ranks  );
     if(level->exchange_ghosts[i].recv_sizes  )free(level->exchange_ghosts[i].recv_sizes  );
     }
     if(level->exchange_ghosts[i].num_sends>0){
-    for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])um_free(level->exchange_ghosts[i].send_buffers[j], level->um_access_policy);
+    for(j=0;j<level->exchange_ghosts[i].num_sends;j++)if(level->exchange_ghosts[i].send_buffers[j])um_free(level->exchange_ghosts[i].send_buffers[j], UM_ACCESS_BOTH);
     if(level->exchange_ghosts[i].send_buffers)free(level->exchange_ghosts[i].send_buffers);
     if(level->exchange_ghosts[i].send_ranks  )free(level->exchange_ghosts[i].send_ranks  );
     if(level->exchange_ghosts[i].send_sizes  )free(level->exchange_ghosts[i].send_sizes  );
@@ -1450,14 +1450,14 @@ void destroy_level(level_type *level){
   // restriction mini programs...
   for(i=0;i<4;i++){
     if(level->restriction[i].num_recvs>0){
-    for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])um_free(level->restriction[i].recv_buffers[j], level->um_access_policy);
+    for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])um_free(level->restriction[i].recv_buffers[j], UM_ACCESS_BOTH);
     //if(level->restriction[i].recv_buffers[0])um_free(level->restriction[i].recv_buffers[0], level->um_access_policy); // allocated in bulk
     if(level->restriction[i].recv_buffers   )free(level->restriction[i].recv_buffers   );
     if(level->restriction[i].recv_ranks     )free(level->restriction[i].recv_ranks     );
     if(level->restriction[i].recv_sizes     )free(level->restriction[i].recv_sizes     );
     }
     if(level->restriction[i].num_sends>0){
-    for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])um_free(level->restriction[i].send_buffers[j], level->um_access_policy);
+    for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])um_free(level->restriction[i].send_buffers[j], UM_ACCESS_BOTH);
     //if(level->restriction[i].send_buffers[0])um_free(level->restriction[i].send_buffers[0], level->um_access_policy); // allocated in bulk
     if(level->restriction[i].send_buffers   )free(level->restriction[i].send_buffers   );
     if(level->restriction[i].send_ranks     )free(level->restriction[i].send_ranks     );
@@ -1474,14 +1474,14 @@ void destroy_level(level_type *level){
 
   // interpolation mini programs...
   if(level->interpolation.num_recvs>0){
-  for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])um_free(level->interpolation.recv_buffers[j], level->um_access_policy);
+  for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])um_free(level->interpolation.recv_buffers[j], UM_ACCESS_BOTH);
   //if(level->interpolation.recv_buffers[0])um_free(level->interpolation.recv_buffers[0], level->um_access_policy); // allocated in bulk
   if(level->interpolation.recv_buffers   )free(level->interpolation.recv_buffers   );
   if(level->interpolation.recv_ranks     )free(level->interpolation.recv_ranks     );
   if(level->interpolation.recv_sizes     )free(level->interpolation.recv_sizes     );
   }
   if(level->interpolation.num_sends>0){
-  for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])um_free(level->interpolation.send_buffers[j], level->um_access_policy);
+  for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])um_free(level->interpolation.send_buffers[j], UM_ACCESS_BOTH);
   //if(level->interpolation.send_buffers[0])um_free(level->interpolation.send_buffers[0], level->um_access_policy); // allocated in bulk
   if(level->interpolation.send_buffers   )free(level->interpolation.send_buffers   );
   if(level->interpolation.send_ranks     )free(level->interpolation.send_ranks     );

@@ -40,7 +40,7 @@ def main():
     fv.add_argument('--fv-cycle', help='Multigrid cycle type', choices=['V','F','W'], default='F')
     fv.add_argument('--no-fv-subcomm', action='store_false', dest='fv_subcomm', help='Build a subcommunicator for each level in the MG v-cycle to minimize the scope of MPI_AllReduce()')
     fv.add_argument('--fv-coarse-solver', help='Use BiCGStab as a bottom (coarse grid) solver', choices=['bicgstab','cabicgstab','cg','cacg'], default='bicgstab')
-    fv.add_argument('--fv-smoother', help='Multigrid smoother', choices=['cheby','gsrb','jacobi','l1jacobi'], default='cheby')
+    fv.add_argument('--fv-smoother', help='Multigrid smoother', choices=['cheby','gsrb','jacobi','l1jacobi'], default='gsrb')
     args = parser.parse_args()
     if args.arch is None:
         args.arch = args.petsc_arch
@@ -121,7 +121,7 @@ def hpgmg_fv_cflags(args):
     if args.fv_subcomm:
         defines.append('USE_SUBCOMM')
     defines.append('USE_%sCYCLES' % args.fv_cycle.upper())
-    #defines.append('USE_%s' % args.fv_smoother.upper()) # dont want default macro when using different smoother
+    defines.append('USE_%s' % args.fv_smoother.upper())
     #defines.append('STENCIL_FUSE_DINV') # generally only good on compute-intensive architectures with good compilers
     #defines.append('STENCIL_FUSE_BC')
     return ' '.join('-D%s=1'%d for d in defines)

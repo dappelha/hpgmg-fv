@@ -536,8 +536,10 @@ void color_vector(level_type * level, int id_a, int colors_in_each_dim, int icol
   uint64_t _timeStart = CycleTime();
   int block;
 
-  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
-
+  if(level->use_cuda) {
+    cuda_color_vector(*level, id_a, colors_in_each_dim, icolor, jcolor, kcolor);
+  }
+  else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -562,6 +564,7 @@ void color_vector(level_type * level, int id_a, int colors_in_each_dim, int icol
       int ijk = i + j*jStride + k*kStride;
       grid[ijk] = si*sj*sk;
     }}}
+  }
   }
   level->cycles.blas1 += (uint64_t)(CycleTime()-_timeStart);
 }

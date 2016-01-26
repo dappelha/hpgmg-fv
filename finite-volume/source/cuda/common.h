@@ -29,6 +29,7 @@
 // available device functions
 void cuda_smooth(level_type level, int x_id, int rhs_id, double a, double b, int s, double *c, double *d);
 void cuda_residual(level_type d_level, int res_id, int x_id, int rhs_id, double a, double b);
+void cuda_rebuild(level_type level, int x_id, int Aii_id, int sumAbsAij_id, double a, double b);
 
 void cuda_restriction(level_type d_level_c, int id_c, level_type d_level_f, int id_f, communicator_type restriction, int restrictionType, int block_type);
 
@@ -49,6 +50,7 @@ void cuda_mul_vectors(level_type d_level, int id_c, double scale, int id_a, int 
 void cuda_add_vectors(level_type d_level, int id_c, double scale_a, int id_a, double scale_b, int id_b);
 double cuda_sum(level_type d_level, int id);
 double cuda_max_abs(level_type d_level, int id);
+void cuda_color_vector(level_type d_level, int id_a, int colors_in_each_dim, int icolor, int jcolor, int kcolor);
 
 void cuda_copy_block(level_type d_level, int id, communicator_type exchange_ghosts, int block_type);
 void cuda_increment_block(level_type d_level, int id, double prescale, communicator_type exchange_ghosts, int block_type);

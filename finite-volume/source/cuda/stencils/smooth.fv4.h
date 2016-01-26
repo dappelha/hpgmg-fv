@@ -61,13 +61,19 @@ __global__ void smooth_kernel(level_type level, int x_id, int rhs_id, double a, 
   #endif
 
         double * __restrict__ xo;
+  #ifdef USE_CHEBY
   const double * __restrict__ xp;
+  #endif
   const double * __restrict__ x;
                    if((s&1)==0){x      = level.my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);
+  #ifdef USE_CHEBY
                                 xp     = level.my_boxes[box].vectors[VECTOR_TEMP  ] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);
+  #endif
                                 xo     = level.my_boxes[box].vectors[VECTOR_TEMP  ] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);}
                            else{x      = level.my_boxes[box].vectors[VECTOR_TEMP  ] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);
+  #ifdef USE_CHEBY
                                 xp     = level.my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);
+  #endif
                                 xo     = level.my_boxes[box].vectors[         x_id] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);}
 
   #ifdef USE_CHEBY

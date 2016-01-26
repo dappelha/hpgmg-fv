@@ -82,9 +82,6 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   zero_vector(level,      Aii_id);
   zero_vector(level,sumAbsAij_id);
 
-  // make sure GPU completed all its kernels
-  cudaDeviceSynchronize();
-
   // loop over all colors...
   for(kcolor=0;kcolor<colors_in_each_dim;kcolor++){
   for(jcolor=0;jcolor<colors_in_each_dim;jcolor++){
@@ -96,10 +93,11 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
     exchange_boundary(level,x_id,stencil_get_shape());
             apply_BCs(level,x_id,stencil_get_shape());
 
-    // make sure GPU completed all its kernels
-    cudaDeviceSynchronize();
- 
     // apply the operator and add to Aii and AbsAij 
+    if (level->use_cuda) {
+      cuda_rebuild(*level, x_id, Aii_id, sumAbsAij_id, a, b);
+    }
+    else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
     for(block=0;block<level->num_my_blocks;block++){
       const int box = level->my_blocks[block].read.box;
@@ -131,8 +129,11 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
         sumAbsAij[ijk] += fabs((1.0-x[ijk])*Ax);
       }}}
     }
+    }
   }}}
 
+  // make sure GPU kernels have finished since the following part runs on CPU
+  cudaDeviceSynchronize();
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // take Aii and the row sum sumAbsAij and calculate D^{-1} and L1^{-1}...

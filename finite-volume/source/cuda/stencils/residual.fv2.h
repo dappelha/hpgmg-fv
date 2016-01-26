@@ -27,7 +27,7 @@
 */
 
 //------------------------------------------------------------------------------------------------------------------------------
-template<int LOG_DIM_I, int BLOCK_I, int BLOCK_J, int BLOCK_K>
+template<int LOG_DIM_I, int BLOCK_I, int BLOCK_J, int BLOCK_K, int REBUILD>
 __global__ void residual_kernel(level_type level, int res_id, int x_id, int rhs_id, double a, double b){
   const int idim = level.my_blocks[blockIdx.x].dim.i;
   const int jdim = level.my_blocks[blockIdx.x].dim.j;
@@ -47,7 +47,7 @@ __global__ void residual_kernel(level_type level, int res_id, int x_id, int rhs_
   const int kStride = level.my_boxes[box].kStride;
   const double h2inv = 1.0/(level.h*level.h);
 
-  const double * __restrict__ rhs      = level.my_boxes[box].vectors[       rhs_id] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);
+        double * __restrict__ rhs      = level.my_boxes[box].vectors[       rhs_id] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);
   #ifdef USE_HELMHOLTZ
   const double * __restrict__ alpha    = level.my_boxes[box].vectors[VECTOR_ALPHA ] + ghosts*(1+jStride+kStride) + (ilo + jlo*jStride + klo*kStride);
   #endif
@@ -89,9 +89,16 @@ __global__ void residual_kernel(level_type level, int res_id, int x_id, int rhs_
     + bkc1           *( xc0            - xc1 )
     );
 
-    // residual
-    res[ijk] = rhs[ijk] - Ax;
-
+    if (!REBUILD) {
+      // residual
+      res[ijk] = rhs[ijk] - Ax;
+    }
+    else {
+      // subroutine in rebuild to calculate inverse D
+      // repurpose variables: Aii == rhs, sumAbsAij == res
+      rhs[ijk] +=      (    x[ijk])*Ax; // add the effect of setting one grid point (i) to 1.0 to Aii
+      res[ijk] += fabs((1.0-x[ijk])*Ax);
+    }
 
     // update k and k-1 planes in registers
     xc0 = xc1;  xc1 = xc2;
@@ -101,10 +108,26 @@ __global__ void residual_kernel(level_type level, int res_id, int x_id, int rhs_
 //------------------------------------------------------------------------------------------------------------------------------
 #undef  STENCIL_KERNEL
 #define STENCIL_KERNEL(log_dim_i, block_i, block_j, block_k) \
-  residual_kernel<log_dim_i, block_i, block_j, block_k><<<dim3(num_blocks, (block_dim_k+block_k-1)/block_k), dim3(block_i, block_j)>>>(level, res_id, x_id, rhs_id, a, b);
+  residual_kernel<log_dim_i, block_i, block_j, block_k, 0><<<dim3(num_blocks, (block_dim_k+block_k-1)/block_k), dim3(block_i, block_j)>>>(level, res_id, x_id, rhs_id, a, b);
 
 extern "C"
 void cuda_residual(level_type level, int res_id, int x_id, int rhs_id, double a, double b)
+{
+  int num_blocks = level.num_my_blocks; if(num_blocks<=0) return;
+  int log_dim_i = (int)log2((double)level.dim.i);
+  int block_dim_i = min(level.box_dim, BLOCKCOPY_TILE_I);
+  int block_dim_k = min(level.box_dim, BLOCKCOPY_TILE_K);
+
+  STENCIL_KERNEL_LEVEL(log_dim_i)
+  CUDA_ERROR
+}
+
+#undef  STENCIL_KERNEL
+#define STENCIL_KERNEL(log_dim_i, block_i, block_j, block_k) \
+  residual_kernel<log_dim_i, block_i, block_j, block_k, 1><<<dim3(num_blocks, (block_dim_k+block_k-1)/block_k), dim3(block_i, block_j)>>>(level, sumAbsAij_id, x_id, Aii_id, a, b);
+
+extern "C"
+void cuda_rebuild(level_type level, int x_id, int Aii_id, int sumAbsAij_id, double a, double b)
 {
   int num_blocks = level.num_my_blocks; if(num_blocks<=0) return;
   int log_dim_i = (int)log2((double)level.dim.i);
