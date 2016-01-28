@@ -259,8 +259,8 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
     exchange_boundary(level_c,id_c,STENCIL_SHAPE_BOX);
          apply_BCs_v4(level_c,id_c,STENCIL_SHAPE_BOX);
 
-  uint64_t _timeCommunicationStart = CycleTime();
-  uint64_t _timeStart,_timeEnd;
+  double _timeCommunicationStart = getTime();
+  double _timeStart,_timeEnd;
   int buffer=0;
   int n;
   int my_tag = (level_f->tag<<4) | 0x7;
@@ -275,7 +275,7 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
 
   // loop through packed list of MPI receives and prepost Irecv's...
   if(level_f->interpolation.num_recvs>0){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     #ifdef USE_MPI_THREAD_MULTIPLE
     #pragma omp parallel for schedule(dynamic,1)
     #endif
@@ -289,14 +289,14 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
                 &recv_requests[n]
       );
     }
-    _timeEnd = CycleTime();
-    level_f->cycles.interpolation_recv += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level_f->timers.interpolation_recv += (_timeEnd-_timeStart);
   }
 
 
   // pack MPI send buffers...
   if(level_c->interpolation.num_blocks[0]>0){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     if(level_c->use_cuda) {
       cuda_interpolation_v4(*level_f,id_f,0.0,*level_c,id_c,level_c->interpolation,0);
       cudaDeviceSynchronize();
@@ -308,14 +308,14 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
       interpolation_v4_block(level_f,id_f,0.0,level_c,id_c,&level_c->interpolation.blocks[0][buffer]);
     }
     }
-    _timeEnd = CycleTime();
-    level_f->cycles.interpolation_pack += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level_f->timers.interpolation_pack += (_timeEnd-_timeStart);
   }
 
 
   // loop through MPI send buffers and post Isend's...
   if(level_c->interpolation.num_sends>0){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     #ifdef USE_MPI_THREAD_MULTIPLE
     #pragma omp parallel for schedule(dynamic,1)
     #endif
@@ -329,15 +329,15 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
                 &send_requests[n]
       );
     }
-    _timeEnd = CycleTime();
-    level_f->cycles.interpolation_send += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level_f->timers.interpolation_send += (_timeEnd-_timeStart);
   }
   #endif
 
 
   // perform local interpolation... try and hide within Isend latency... 
   if(level_c->interpolation.num_blocks[1]>0){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     if(level_f->use_cuda){
       cuda_interpolation_v4(*level_f,id_f,prescale_f,*level_c,id_c,level_c->interpolation,1);
       cudaDeviceSynchronize();
@@ -348,24 +348,24 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
       interpolation_v4_block(level_f,id_f,prescale_f,level_c,id_c,&level_c->interpolation.blocks[1][buffer]);
     }
     }
-    _timeEnd = CycleTime();
-    level_f->cycles.interpolation_local += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level_f->timers.interpolation_local += (_timeEnd-_timeStart);
   }
 
 
   // wait for MPI to finish...
   #ifdef USE_MPI 
   if(nMessages>0){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     MPI_Waitall(nMessages,level_f->interpolation.requests,level_f->interpolation.status);
-    _timeEnd = CycleTime();
-    level_f->cycles.interpolation_wait += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level_f->timers.interpolation_wait += (_timeEnd-_timeStart);
   }
 
 
   // unpack MPI receive buffers 
   if(level_f->interpolation.num_blocks[2]>0){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     if(level_f->use_cuda) {
       cuda_increment_block(*level_f,id_f,prescale_f,level_f->interpolation,2);
     }
@@ -375,11 +375,11 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
       IncrementBlock(level_f,id_f,prescale_f,&level_f->interpolation.blocks[2][buffer]);
     }
     }
-    _timeEnd = CycleTime();
-    level_f->cycles.interpolation_unpack += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level_f->timers.interpolation_unpack += (_timeEnd-_timeStart);
   }
   #endif 
  
  
-  level_f->cycles.interpolation_total += (uint64_t)(CycleTime()-_timeCommunicationStart);
+  level_f->timers.interpolation_total += (double)(getTime()-_timeCommunicationStart);
 }

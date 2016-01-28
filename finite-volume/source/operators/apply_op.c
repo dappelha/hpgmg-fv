@@ -12,7 +12,7 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){
           apply_BCs(level,x_id,stencil_get_shape());
 
   // now do Ax proper...
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   int block;
 
   if(level->use_cuda)cudaDeviceSynchronize(); // FIX... wait for any other GPU operations on this level to complete
@@ -46,6 +46,6 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){
       Ax[ijk] = apply_op_ijk(x);
     }}}
   }
-  level->cycles.apply_op += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.apply_op += (double)(getTime()-_timeStart);
 }
 //------------------------------------------------------------------------------------------------------------------------------

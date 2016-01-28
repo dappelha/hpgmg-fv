@@ -20,6 +20,8 @@
 #include <omp.h>
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
+#include "timers.h"
+#include "defines.h"
 #include "level.h"
 #include "operators.h"
 #include "cuda/common.h"
@@ -252,12 +254,11 @@ void decompose_level_bisection(int *rank_of_box, int jStride, int kStride, int i
 
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
+// Given a bounding box (idim,jdim,kdim) use a Z-morton Space Filling Curve (SFC) to assign the boxes within the (boxes_in_i,boxes_in_j,boxes_in_k) valid region domain
+//  sfc_offset is the current offset within the space filling curve (starts with 0)
+//  this function returns the new offset based on how many actual boxes it found within (ilo,jlo,klo) + (idim,jdim,kdim)
+//  sfc_max_length is the maximum length of the SFC.  Note, if this length exceeds boxes_in_i*boxes_in_j*boxes_in_k, then some processes with receive no work
 int decompose_level_zmort(int *rank_of_box, int boxes_in_i, int boxes_in_j, int boxes_in_k, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
-  // given a power of two bounding box (idim,jdim,kdim) recursively assign the boxes within the (boxes_in_i,boxes_in_j,boxes_in_k) domain using a Z-morton Space Filling Curve (SFC)
-  // sfc_offset is the current offset within the space filling curve
-  // sfc_max_length is the maximum length of the SFC.  Note, if this length exceeds boxes_in_i*boxes_in_j*boxes_in_k, then some processes with receive no work
-  // this function returns the new offset based on how many boxes it found within (ilo,jlo,klo) + (idim,jdim,kdim)
-  // idim, jdim, and kdim MUST BE powers of two !!!
 
   // invalid cases...
   if(idim<1)return(sfc_offset);
@@ -283,17 +284,18 @@ int decompose_level_zmort(int *rank_of_box, int boxes_in_i, int boxes_in_j, int 
   int jmid = jlo + (jdim/2);
   int kmid = klo + (kdim/2);
 
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,klo ,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
-  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,kmid,idim/2,jdim/2,kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,klo ,     idim/2,     jdim/2,     kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,klo ,idim-idim/2,     jdim/2,     kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,klo ,     idim/2,jdim-jdim/2,     kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,klo ,idim-idim/2,jdim-jdim/2,     kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jlo ,kmid,     idim/2,     jdim/2,kdim-kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jlo ,kmid,idim-idim/2,     jdim/2,kdim-kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,ilo ,jmid,kmid,     idim/2,jdim-jdim/2,kdim-kdim/2,ranks,sfc_offset,sfc_max_length);
+  sfc_offset=decompose_level_zmort(rank_of_box,boxes_in_i,boxes_in_j,boxes_in_k,imid,jmid,kmid,idim-idim/2,jdim-jdim/2,kdim-kdim/2,ranks,sfc_offset,sfc_max_length);
   return(sfc_offset);
-
 }
+
+
 //------------------------------------------------------------------------------------------------------------------------------
 //int decompose_level_hilbert(int *rank_of_box, int boxes_in_i, int boxes_in_j, int boxes_in_k, int ilo, int jlo, int klo, int idim, int jdim, int kdim, int ranks, int sfc_offset, int sfc_max_length){
 // implements a 3D hilbert curve on the non-power of two domain using a power of two bounding box
@@ -497,12 +499,9 @@ void build_boundary_conditions(level_type *level, int shape){
 
     // default tile sizes...
     // NOTE, BC's may never tile smaller than the ghost zone depth
-    int BLOCK_TILE_I = 64;
-    int BLOCK_TILE_J = 16;
-    int BLOCK_TILE_K = 16;
-    int blockcopy_i = (BLOCK_TILE_I < level->box_ghosts) ? level->box_ghosts : BLOCK_TILE_I;
-    int blockcopy_j = (BLOCK_TILE_J < level->box_ghosts) ? level->box_ghosts : BLOCK_TILE_J;
-    int blockcopy_k = (BLOCK_TILE_K < level->box_ghosts) ? level->box_ghosts : BLOCK_TILE_K;
+    int blockcopy_i = (BOUNDARY_TILE_I < level->box_ghosts) ? level->box_ghosts : BOUNDARY_TILE_I;
+    int blockcopy_j = (BOUNDARY_TILE_J < level->box_ghosts) ? level->box_ghosts : BOUNDARY_TILE_J;
+    int blockcopy_k = (BOUNDARY_TILE_K < level->box_ghosts) ? level->box_ghosts : BOUNDARY_TILE_K;
 
     #if 0
     // 2D tiling of faces
@@ -1182,12 +1181,16 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   if(my_rank==0){fprintf(stdout,"  Decomposing level via recursive bisection... ");fflush(stdout);}
   decompose_level_bisection(level->rank_of_box,level->boxes_in.i,level->boxes_in.i*level->boxes_in.j,0,0,0,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,num_ranks,0,level->boxes_in.i*level->boxes_in.j*level->boxes_in.k);
   #else//#elif DECOMPOSE_ZMORT
-  // Function mandates idim, jdim, and kdim are powers of two, but is smart enough to only apply the SFC within the valid domain
-  // As such, create a power of two bounding box for a potentially non power of two domain...
   if(my_rank==0){fprintf(stdout,"  Decomposing level via Z-mort ordering... ");fflush(stdout);}
-  int idim_padded=1;while(idim_padded<level->boxes_in.i)idim_padded*=2;;
-  int jdim_padded=1;while(jdim_padded<level->boxes_in.j)jdim_padded*=2;;
-  int kdim_padded=1;while(kdim_padded<level->boxes_in.k)kdim_padded*=2;;
+  #if 0 // Z-Mort over a power of two bounding box skipping boxes outside the domain
+  int idim_padded=1;while(idim_padded<level->boxes_in.i)idim_padded*=2;
+  int jdim_padded=1;while(jdim_padded<level->boxes_in.j)jdim_padded*=2;
+  int kdim_padded=1;while(kdim_padded<level->boxes_in.k)kdim_padded*=2;
+  #else // Z-Mort over the valid domain wtih odd-sized base cases (i.e. zmort on 3x3)
+  int idim_padded=level->boxes_in.i;
+  int jdim_padded=level->boxes_in.j;
+  int kdim_padded=level->boxes_in.k;
+  #endif
   decompose_level_zmort(level->rank_of_box,level->boxes_in.i,level->boxes_in.j,level->boxes_in.k,0,0,0,idim_padded,jdim_padded,kdim_padded,num_ranks,0,level->boxes_in.i*level->boxes_in.j*level->boxes_in.k);
   #endif
   if(my_rank==0){fprintf(stdout,"done\n");fflush(stdout);}
@@ -1320,75 +1323,39 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
 // useful if one wishes to separate setup(build) timing from solve timing
 void reset_level_timers(level_type *level){
   // cycle counters information...
-  level->cycles.smooth                  = 0;
-  level->cycles.apply_op                = 0;
-  level->cycles.residual                = 0;
-  level->cycles.blas1                   = 0;
-  level->cycles.blas3                   = 0;
-  level->cycles.boundary_conditions     = 0;
-  level->cycles.restriction_total       = 0;
-  level->cycles.restriction_pack        = 0;
-  level->cycles.restriction_local       = 0;
-  level->cycles.restriction_unpack      = 0;
-  level->cycles.restriction_recv        = 0;
-  level->cycles.restriction_send        = 0;
-  level->cycles.restriction_wait        = 0;
-  level->cycles.interpolation_total     = 0;
-  level->cycles.interpolation_pack      = 0;
-  level->cycles.interpolation_local     = 0;
-  level->cycles.interpolation_unpack    = 0;
-  level->cycles.interpolation_recv      = 0;
-  level->cycles.interpolation_send      = 0;
-  level->cycles.interpolation_wait      = 0;
-  level->cycles.ghostZone_total         = 0;
-  level->cycles.ghostZone_pack          = 0;
-  level->cycles.ghostZone_local         = 0;
-  level->cycles.ghostZone_unpack        = 0;
-  level->cycles.ghostZone_recv          = 0;
-  level->cycles.ghostZone_send          = 0;
-  level->cycles.ghostZone_wait          = 0;
-  level->cycles.collectives             = 0;
-  level->cycles.Total                   = 0;
+  level->timers.smooth                  = 0;
+  level->timers.apply_op                = 0;
+  level->timers.residual                = 0;
+  level->timers.blas1                   = 0;
+  level->timers.blas3                   = 0;
+  level->timers.boundary_conditions     = 0;
+  level->timers.restriction_total       = 0;
+  level->timers.restriction_pack        = 0;
+  level->timers.restriction_local       = 0;
+  level->timers.restriction_unpack      = 0;
+  level->timers.restriction_recv        = 0;
+  level->timers.restriction_send        = 0;
+  level->timers.restriction_wait        = 0;
+  level->timers.interpolation_total     = 0;
+  level->timers.interpolation_pack      = 0;
+  level->timers.interpolation_local     = 0;
+  level->timers.interpolation_unpack    = 0;
+  level->timers.interpolation_recv      = 0;
+  level->timers.interpolation_send      = 0;
+  level->timers.interpolation_wait      = 0;
+  level->timers.ghostZone_total         = 0;
+  level->timers.ghostZone_pack          = 0;
+  level->timers.ghostZone_local         = 0;
+  level->timers.ghostZone_unpack        = 0;
+  level->timers.ghostZone_recv          = 0;
+  level->timers.ghostZone_send          = 0;
+  level->timers.ghostZone_wait          = 0;
+  level->timers.collectives             = 0;
+  level->timers.Total                   = 0;
   // solver events information...
   level->Krylov_iterations              = 0;
   level->CAKrylov_formations_of_G       = 0;
   level->vcycles_from_this_level        = 0;
-}
-
-//---------------------------------------------------------------------------------------------------------------------------------------------------
-void max_level_timers(level_type *level){
-  uint64_t temp;
-  #ifdef USE_MPI
-  temp=level->cycles.smooth;              MPI_Allreduce(&temp,&level->cycles.smooth              ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.apply_op;            MPI_Allreduce(&temp,&level->cycles.apply_op            ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.residual;            MPI_Allreduce(&temp,&level->cycles.residual            ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.blas1;               MPI_Allreduce(&temp,&level->cycles.blas1               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.blas3;               MPI_Allreduce(&temp,&level->cycles.blas3               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.boundary_conditions; MPI_Allreduce(&temp,&level->cycles.boundary_conditions ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_total;   MPI_Allreduce(&temp,&level->cycles.restriction_total   ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_pack;    MPI_Allreduce(&temp,&level->cycles.restriction_pack    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_local;   MPI_Allreduce(&temp,&level->cycles.restriction_local   ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_unpack;  MPI_Allreduce(&temp,&level->cycles.restriction_unpack  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_recv;    MPI_Allreduce(&temp,&level->cycles.restriction_recv    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_send;    MPI_Allreduce(&temp,&level->cycles.restriction_send    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.restriction_wait;    MPI_Allreduce(&temp,&level->cycles.restriction_wait    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_total; MPI_Allreduce(&temp,&level->cycles.interpolation_total ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_pack;  MPI_Allreduce(&temp,&level->cycles.interpolation_pack  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_local; MPI_Allreduce(&temp,&level->cycles.interpolation_local ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_unpack;MPI_Allreduce(&temp,&level->cycles.interpolation_unpack,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_recv;  MPI_Allreduce(&temp,&level->cycles.interpolation_recv  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_send;  MPI_Allreduce(&temp,&level->cycles.interpolation_send  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.interpolation_wait;  MPI_Allreduce(&temp,&level->cycles.interpolation_wait  ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_total;     MPI_Allreduce(&temp,&level->cycles.ghostZone_total     ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_pack;      MPI_Allreduce(&temp,&level->cycles.ghostZone_pack      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_local;     MPI_Allreduce(&temp,&level->cycles.ghostZone_local     ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_unpack;    MPI_Allreduce(&temp,&level->cycles.ghostZone_unpack    ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_recv;      MPI_Allreduce(&temp,&level->cycles.ghostZone_recv      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_send;      MPI_Allreduce(&temp,&level->cycles.ghostZone_send      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.ghostZone_wait;      MPI_Allreduce(&temp,&level->cycles.ghostZone_wait      ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.collectives;         MPI_Allreduce(&temp,&level->cycles.collectives         ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  temp=level->cycles.Total;               MPI_Allreduce(&temp,&level->cycles.Total               ,1,MPI_UINT64_T,MPI_MAX,MPI_COMM_WORLD);
-  #endif
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1397,7 +1364,7 @@ void max_level_timers(level_type *level){
 void destroy_level(level_type *level){
 
   int i,j;
-  if(level->my_rank==0){fprintf(stdout,"attempting to destroy the %5d^3 level... ",level->dim.i);fflush(stdout);}
+  if(level->my_rank==0){fprintf(stdout,"attempting to free the %5d^3 level... ",level->dim.i);fflush(stdout);}
 
   // box ...
   for(i=0;i<level->num_my_boxes;i++)if(level->my_boxes[i].vectors)um_free(level->my_boxes[i].vectors, level->um_access_policy);
@@ -1446,54 +1413,6 @@ void destroy_level(level_type *level){
     if(level->exchange_ghosts[i].status      )free(level->exchange_ghosts[i].status      );
     #endif
   }
-
-  // restriction mini programs...
-  for(i=0;i<4;i++){
-    if(level->restriction[i].num_recvs>0){
-    for(j=0;j<level->restriction[i].num_recvs;j++)if(level->restriction[i].recv_buffers[j])um_free(level->restriction[i].recv_buffers[j], UM_ACCESS_BOTH);
-    //if(level->restriction[i].recv_buffers[0])um_free(level->restriction[i].recv_buffers[0], level->um_access_policy); // allocated in bulk
-    if(level->restriction[i].recv_buffers   )free(level->restriction[i].recv_buffers   );
-    if(level->restriction[i].recv_ranks     )free(level->restriction[i].recv_ranks     );
-    if(level->restriction[i].recv_sizes     )free(level->restriction[i].recv_sizes     );
-    }
-    if(level->restriction[i].num_sends>0){
-    for(j=0;j<level->restriction[i].num_sends;j++)if(level->restriction[i].send_buffers[j])um_free(level->restriction[i].send_buffers[j], UM_ACCESS_BOTH);
-    //if(level->restriction[i].send_buffers[0])um_free(level->restriction[i].send_buffers[0], level->um_access_policy); // allocated in bulk
-    if(level->restriction[i].send_buffers   )free(level->restriction[i].send_buffers   );
-    if(level->restriction[i].send_ranks     )free(level->restriction[i].send_ranks     );
-    if(level->restriction[i].send_sizes     )free(level->restriction[i].send_sizes     );
-    }
-    if(level->restriction[i].blocks[0]      )um_free(level->restriction[i].blocks[0], level->um_access_policy);
-    if(level->restriction[i].blocks[1]      )um_free(level->restriction[i].blocks[1], level->um_access_policy);
-    if(level->restriction[i].blocks[2]      )um_free(level->restriction[i].blocks[2], level->um_access_policy);
-    #ifdef USE_MPI
-    if(level->restriction[i].requests       )free(level->restriction[i].requests       );
-    if(level->restriction[i].status         )free(level->restriction[i].status         );
-    #endif
-  }
-
-  // interpolation mini programs...
-  if(level->interpolation.num_recvs>0){
-  for(j=0;j<level->interpolation.num_recvs;j++)if(level->interpolation.recv_buffers[j])um_free(level->interpolation.recv_buffers[j], UM_ACCESS_BOTH);
-  //if(level->interpolation.recv_buffers[0])um_free(level->interpolation.recv_buffers[0], level->um_access_policy); // allocated in bulk
-  if(level->interpolation.recv_buffers   )free(level->interpolation.recv_buffers   );
-  if(level->interpolation.recv_ranks     )free(level->interpolation.recv_ranks     );
-  if(level->interpolation.recv_sizes     )free(level->interpolation.recv_sizes     );
-  }
-  if(level->interpolation.num_sends>0){
-  for(j=0;j<level->interpolation.num_sends;j++)if(level->interpolation.send_buffers[j])um_free(level->interpolation.send_buffers[j], UM_ACCESS_BOTH);
-  //if(level->interpolation.send_buffers[0])um_free(level->interpolation.send_buffers[0], level->um_access_policy); // allocated in bulk
-  if(level->interpolation.send_buffers   )free(level->interpolation.send_buffers   );
-  if(level->interpolation.send_ranks     )free(level->interpolation.send_ranks     );
-  if(level->interpolation.send_sizes     )free(level->interpolation.send_sizes     );
-  }
-  if(level->interpolation.blocks[0]      )um_free(level->interpolation.blocks[0], level->um_access_policy);
-  if(level->interpolation.blocks[1]      )um_free(level->interpolation.blocks[1], level->um_access_policy);
-  if(level->interpolation.blocks[2]      )um_free(level->interpolation.blocks[2], level->um_access_policy);
-  #ifdef USE_MPI
-  if(level->interpolation.requests       )free(level->interpolation.requests       );
-  if(level->interpolation.status         )free(level->interpolation.status         );
-  #endif
 
   if(level->my_rank==0){fprintf(stdout,"done\n");}
 }

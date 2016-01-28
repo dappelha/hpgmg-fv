@@ -127,21 +127,21 @@
   #include "stencils/gsrb.h"
 #else
   #ifdef USE_SHM // shared memory
-  #include "stencils/smooth.fv2.h"
+  #include "stencils/smooth.reg.fv2.h"
   #elif  USE_REG // registers
-  #include "stencils/smooth.fv2.h"
+  #include "stencils/smooth.reg.fv2.h"
   #else // baseline
-  #include "stencils/smooth.h"
+  #include "stencils/smooth.base.h"
   #endif
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 // include residual
 #ifdef USE_SHM // shared memory
-#include "stencils/residual.fv2.h"
+#include "stencils/residual.reg.fv2.h"
 #elif  USE_REG // registers
-#include "stencils/residual.fv2.h"
+#include "stencils/residual.reg.fv2.h"
 #else // baseline
-#include "stencils/residual.h"
+#include "stencils/residual.base.h"
 #endif
 //------------------------------------------------------------------------------------------------------------------------------
 // include other kernels

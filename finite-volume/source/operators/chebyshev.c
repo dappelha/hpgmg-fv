@@ -61,7 +61,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
             else{exchange_boundary(level,VECTOR_TEMP,stencil_get_shape());apply_BCs(level,VECTOR_TEMP,stencil_get_shape());}
    
     // apply the smoother... Chebyshev ping pongs between x_id and VECTOR_TEMP
-    uint64_t _timeStart = CycleTime();
+    double _timeStart = getTime();
 
     if (level->use_cuda) {
       cuda_smooth(*level, x_id, rhs_id, a, b, s, level->chebyshev_c1, level->chebyshev_c2);
@@ -115,6 +115,6 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
     } // box-loop
     } // use-cuda
-    level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
+    level->timers.smooth += (double)(getTime()-_timeStart);
   } // s-loop
 }

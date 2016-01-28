@@ -34,7 +34,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
     #endif
 
     // apply the smoother...
-    uint64_t _timeStart = CycleTime();
+    double _timeStart = getTime();
 
     if (level->use_cuda) {
       cuda_smooth(*level, x_id, rhs_id, a, b, s, NULL, NULL);
@@ -134,7 +134,7 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 
     } // boxes
     } // use-cuda
-    level->cycles.smooth += (uint64_t)(CycleTime()-_timeStart);
+    level->timers.smooth += (double)(getTime()-_timeStart);
   } // s-loop
 }
 

@@ -10,8 +10,8 @@
 // The argument shape indicates which of faces, edges, and corners on each box must be exchanged
 //  If the specified shape exceeds the range of defined shapes, the code will default to STENCIL_SHAPE_BOX (i.e. exchange faces, edges, and corners)
 void exchange_boundary(level_type * level, int id, int shape){
-  uint64_t _timeCommunicationStart = CycleTime();
-  uint64_t _timeStart,_timeEnd;
+  double _timeCommunicationStart = getTime();
+  double _timeStart,_timeEnd;
 
   if(shape>=STENCIL_MAX_SHAPES)shape=STENCIL_SHAPE_BOX;  // shape must be < STENCIL_MAX_SHAPES in order to safely index into exchange_ghosts[]
   int my_tag = (level->tag<<4) | shape;
@@ -27,7 +27,7 @@ void exchange_boundary(level_type * level, int id, int shape){
 
   // loop through packed list of MPI receives and prepost Irecv's...
   if(level->exchange_ghosts[shape].num_recvs>0){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     #ifdef USE_MPI_THREAD_MULTIPLE
     #pragma omp parallel for schedule(dynamic,1)
     #endif
@@ -41,14 +41,14 @@ void exchange_boundary(level_type * level, int id, int shape){
                 &recv_requests[n]
       );
     }
-    _timeEnd = CycleTime();
-    level->cycles.ghostZone_recv += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level->timers.ghostZone_recv += (_timeEnd-_timeStart);
   }
 
 
   // pack MPI send buffers...
   if(level->exchange_ghosts[shape].num_blocks[0]){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     if(level->use_cuda) {
       cuda_copy_block(*level,id,level->exchange_ghosts[shape],0);
       cudaDeviceSynchronize();	// synchronize so the CPU sees the updated buffers
@@ -59,14 +59,14 @@ void exchange_boundary(level_type * level, int id, int shape){
       CopyBlock(level,id,&level->exchange_ghosts[shape].blocks[0][buffer]);
     }
     }
-    _timeEnd = CycleTime();
-    level->cycles.ghostZone_pack += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level->timers.ghostZone_pack += (_timeEnd-_timeStart);
   }
 
  
   // loop through MPI send buffers and post Isend's...
   if(level->exchange_ghosts[shape].num_sends>0){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     #ifdef USE_MPI_THREAD_MULTIPLE
     #pragma omp parallel for schedule(dynamic,1)
     #endif
@@ -80,15 +80,15 @@ void exchange_boundary(level_type * level, int id, int shape){
                 &send_requests[n]
       ); 
     }
-    _timeEnd = CycleTime();
-    level->cycles.ghostZone_send += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level->timers.ghostZone_send += (_timeEnd-_timeStart);
   }
   #endif
 
 
   // exchange locally... try and hide within Isend latency... 
   if(level->exchange_ghosts[shape].num_blocks[1]){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     if (level->use_cuda) {
       cuda_copy_block(*level, id, level->exchange_ghosts[shape], 1);
     }
@@ -98,25 +98,25 @@ void exchange_boundary(level_type * level, int id, int shape){
       CopyBlock(level,id,&level->exchange_ghosts[shape].blocks[1][buffer]);
     }
     }
-    _timeEnd = CycleTime();
-    level->cycles.ghostZone_local += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level->timers.ghostZone_local += (_timeEnd-_timeStart);
   }
 
 
   // wait for MPI to finish...
   #ifdef USE_MPI 
   if(nMessages){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     MPI_Waitall(nMessages,level->exchange_ghosts[shape].requests,level->exchange_ghosts[shape].status);
     cudaDeviceSynchronize();  // FIX... is this really necessary??
-    _timeEnd = CycleTime();
-    level->cycles.ghostZone_wait += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level->timers.ghostZone_wait += (_timeEnd-_timeStart);
   }
 
 
   // unpack MPI receive buffers 
   if(level->exchange_ghosts[shape].num_blocks[2]){
-    _timeStart = CycleTime();
+    _timeStart = getTime();
     if(level->use_cuda) {
       cuda_copy_block(*level,id,level->exchange_ghosts[shape],2);
     }
@@ -126,11 +126,11 @@ void exchange_boundary(level_type * level, int id, int shape){
       CopyBlock(level,id,&level->exchange_ghosts[shape].blocks[2][buffer]);
     }
     }
-    _timeEnd = CycleTime();
-    level->cycles.ghostZone_unpack += (_timeEnd-_timeStart);
+    _timeEnd = getTime();
+    level->timers.ghostZone_unpack += (_timeEnd-_timeStart);
   }
   #endif
 
  
-  level->cycles.ghostZone_total += (uint64_t)(CycleTime()-_timeCommunicationStart);
+  level->timers.ghostZone_total += (double)(getTime()-_timeCommunicationStart);
 }

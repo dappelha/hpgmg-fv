@@ -29,7 +29,7 @@ void apply_BCs_v1(level_type * level, int x_id, int shape){
   const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
   int buffer;
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   if(level->use_cuda) {
     cuda_apply_BCs_v1(*level,x_id,shape);
   }
@@ -90,7 +90,7 @@ void apply_BCs_v1(level_type * level, int x_id, int shape){
     }
   }
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.boundary_conditions += (double)(getTime()-_timeStart);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
@@ -114,7 +114,7 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
   const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
   int buffer;
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   if(level->use_cuda) {
     cuda_apply_BCs_v2(*level,x_id,shape);
   }
@@ -255,7 +255,7 @@ void apply_BCs_v2(level_type * level, int x_id, int shape){
     }
   }
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.boundary_conditions += (double)(getTime()-_timeStart);
 }
 
 
@@ -282,7 +282,7 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
   const int corners[27] = {1,0,1,0,0,0,1,0,1,  0,0,0,0,0,0,0,0,0,  1,0,1,0,0,0,1,0,1};
 
   int buffer;
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   if(level->use_cuda) {
     cuda_apply_BCs_v4(*level,x_id,shape);
     cudaDeviceSynchronize();
@@ -559,7 +559,7 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
     }
   }
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.boundary_conditions += (double)(getTime()-_timeStart);
 }
 
 
@@ -569,7 +569,7 @@ void extrapolate_betas(level_type * level){
   int shape=0;
 
   int buffer;
-  uint64_t _timeStart = CycleTime();
+  double _timeStart = getTime();
   if(level->use_cuda) {
     cuda_extrapolate_betas(*level,shape);
     cudaDeviceSynchronize();
@@ -676,7 +676,7 @@ void extrapolate_betas(level_type * level){
     }
   }
   }
-  level->cycles.boundary_conditions += (uint64_t)(CycleTime()-_timeStart);
+  level->timers.boundary_conditions += (double)(getTime()-_timeStart);
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
