@@ -949,7 +949,6 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
   #endif
   #endif
 
-
   // rebuild various coefficients for the operator... must occur after build_restriction !!!
   if(all_grids->my_rank==0){fprintf(stdout,"\n");}
   for(level=1;level<all_grids->num_levels;level++){
@@ -966,7 +965,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (all_grids->levels[level]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero==1)) )all_grids->levels[level]->must_subtract_mean = 1;
   }
 
-  cudaDeviceSynchronize(); 
+  cudaDeviceSynchronize();  // synchronize GPU at the end of the setup phase
   all_grids->timers.MGBuild += (double)(getTime()-_timeStartMGBuild);
 }
 
@@ -1175,7 +1174,6 @@ void MGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, doub
 //------------------------------------------------------------------------------------------------------------------------------
 void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, double b, double dtol, double rtol){
   all_grids->MGSolves_performed++;
-  cudaDeviceSynchronize();
   if(!all_grids->levels[onLevel]->active)return;
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   #ifdef UNLIMIT_FMG_VCYCLES

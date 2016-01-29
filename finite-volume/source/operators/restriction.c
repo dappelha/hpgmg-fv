@@ -101,9 +101,8 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   int n;
   int my_tag = (level_f->tag<<4) | 0x5;
 
-
-  if(level_f->use_cuda)cudaDeviceSynchronize(); // synchronize so any buffer packing sees the GPU's latest updates
-
+  if (!level_c->use_cuda && level_f->use_cuda)
+    cudaDeviceSynchronize();  // switchover point: must synchronize GPU before running restriction on CPU
 
   #ifdef USE_MPI
   // by convention, level_f allocates a combined array of requests for both level_f sends and level_c recvs...
@@ -137,7 +136,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
     _timeStart = getTime();
     if(level_c->use_cuda) {
       cuda_restriction(*level_c,id_c,*level_f,id_f,level_f->restriction[restrictionType],restrictionType,0);
-      cudaDeviceSynchronize(); // ensure CPU/NIC can see updated buffers
+      cudaDeviceSynchronize(); // synchronize so the CPU sees the updated buffers which will be used for MPI transfers
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[0])
@@ -194,7 +193,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   if(nMessages){
     _timeStart = getTime();
     MPI_Waitall(nMessages,level_f->restriction[restrictionType].requests,level_f->restriction[restrictionType].status);
-    cudaDeviceSynchronize(); // FIX... is this really necessary??
+    //cudaDeviceSynchronize(); // this is not necessary
     _timeEnd = getTime();
     level_f->timers.restriction_wait += (_timeEnd-_timeStart);
   }

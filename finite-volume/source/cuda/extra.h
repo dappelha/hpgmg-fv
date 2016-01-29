@@ -105,7 +105,7 @@
   else if(block_dim_i <= 64)		STENCIL_KERNEL(log_dim_i,  64, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
   else if(block_dim_i <= 128)		STENCIL_KERNEL(log_dim_i, 128, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
   else if(block_dim_i <= 256)		STENCIL_KERNEL(log_dim_i, 256, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-  else	printf("CUDA ERROR: this tile dimension is not supported in the GPU path, please update the macros!\n");
+  else { printf("CUDA ERROR: tile dimension %i is not supported in the GPU path, please update the macros!\n", log_dim_i); exit(1); }
 
 // maximum supported level can have 2^10 dimension
 #define STENCIL_KERNEL_LEVEL(log_dim_i)	      \
@@ -121,7 +121,17 @@
   case 8:  { STENCIL_KERNEL_TILE(8)  break; } \
   case 9:  { STENCIL_KERNEL_TILE(9)  break; } \
   case 10: { STENCIL_KERNEL_TILE(10) break; } \
-  default: { printf("CUDA ERROR: this level size is not supported in the GPU path, please update the macros!\n"); }}
+  case 11: { STENCIL_KERNEL_TILE(11) break; } \
+  case 12: { STENCIL_KERNEL_TILE(12) break; } \
+  case 13: { STENCIL_KERNEL_TILE(13) break; } \
+  case 14: { STENCIL_KERNEL_TILE(14) break; } \
+  case 15: { STENCIL_KERNEL_TILE(15) break; } \
+  case 16: { STENCIL_KERNEL_TILE(16) break; } \
+  case 17: { STENCIL_KERNEL_TILE(17) break; } \
+  case 18: { STENCIL_KERNEL_TILE(18) break; } \
+  case 19: { STENCIL_KERNEL_TILE(19) break; } \
+  case 20: { STENCIL_KERNEL_TILE(20) break; } \
+  default: { printf("CUDA ERROR: level size 2^%i is not supported in the GPU path, please update the macros!\n", log_dim_i); exit(1); }}
 
 //------------------------------------------------------------------------------------------------------------------------------
 // Template kernels at different levels
@@ -140,4 +150,14 @@
   case 8:  { KERNEL(8, block_type)  break; } \
   case 9:  { KERNEL(9, block_type)  break; } \
   case 10: { KERNEL(10, block_type) break; } \
-  default: { printf("CUDA ERROR: this level size is not supported in the GPU path, please update the macros!\n"); }}
+  case 11: { KERNEL(11, block_type) break; } \
+  case 12: { KERNEL(12, block_type) break; } \
+  case 13: { KERNEL(13, block_type) break; } \
+  case 14: { KERNEL(14, block_type) break; } \
+  case 15: { KERNEL(15, block_type) break; } \
+  case 16: { KERNEL(16, block_type) break; } \
+  case 17: { KERNEL(17, block_type) break; } \
+  case 18: { KERNEL(18, block_type) break; } \
+  case 19: { KERNEL(19, block_type) break; } \
+  case 20: { KERNEL(20, block_type) break; } \
+  default: { printf("CUDA ERROR: level size 2^%i is not supported in the GPU path, please update the macros!\n", log_dim); exit(1); }}

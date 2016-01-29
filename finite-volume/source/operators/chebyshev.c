@@ -41,8 +41,8 @@ void smooth(level_type * level, int x_id, int rhs_id, double a, double b){
 #endif
   // compute coefficients only once if using gpu for this level
   if (!level->use_cuda || compute_c1_c2) {
-    // make sure gpu is not running any tasks
-    cudaDeviceSynchronize();  			// TODO: this sync can be removed with support of concurrent CPU/GPU memory access
+    // make sure GPU is not running any tasks, as we cannot access managed memory concurrently on Kepler
+    cudaDeviceSynchronize();  			
     // now compute coefficients on cpu
     chebyshev_c1[0] = 0.0;
     chebyshev_c2[0] = 1/theta;

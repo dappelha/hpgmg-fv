@@ -148,7 +148,7 @@ void cuda_restriction(level_type level_c, int id_c, level_type level_f, int id_f
 {
   int num_blocks = restriction.num_blocks[block_type]; if(num_blocks<=0) return;
   dim3 block = dim3(min(level_c.box_dim,BLOCKCOPY_TILE_I), BLOCKCOPY_TILE_J, 1);
-  dim3 grid = dim3((restriction.blocks[block_type][0].dim.i+block.x-1)/block.x,(restriction.blocks[block_type][0].dim.j+block.y-1)/block.y,num_blocks);
+  dim3 grid = dim3((BLOCKCOPY_TILE_I+block.x-1)/block.x,(BLOCKCOPY_TILE_J+block.y-1)/block.y,num_blocks);
 
   int log_dim = (int)log2((double)level_c.dim.i);
   switch(block_type){

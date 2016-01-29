@@ -285,7 +285,6 @@ void apply_BCs_v4(level_type * level, int x_id, int shape){
   double _timeStart = getTime();
   if(level->use_cuda) {
     cuda_apply_BCs_v4(*level,x_id,shape);
-    cudaDeviceSynchronize();
   }
   else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])
@@ -572,7 +571,6 @@ void extrapolate_betas(level_type * level){
   double _timeStart = getTime();
   if(level->use_cuda) {
     cuda_extrapolate_betas(*level,shape);
-    cudaDeviceSynchronize();
   }
   else {
   PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->boundary_condition.num_blocks[shape])

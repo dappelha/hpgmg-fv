@@ -12,7 +12,6 @@ void zero_vector(level_type * level, int id_a){
     cuda_zero_vector(*level, id_a);
   }
   else {
-  cudaDeviceSynchronize();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -55,7 +54,7 @@ void initialize_valid_region(level_type * level){
   double _timeStart = getTime();
   int block;
 
-  if(level->use_cuda)cudaDeviceSynchronize();
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
@@ -159,7 +158,6 @@ void add_vectors(level_type * level, int id_c, double scale_a, int id_a, double 
     cuda_add_vectors(*level, id_c, scale_a, id_a, scale_b, id_b);
   }
   else {
-  cudaDeviceSynchronize();
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
     const int box = level->my_blocks[block].read.box;
@@ -240,7 +238,7 @@ void invert_vector(level_type * level, int id_c, double scale_a, int id_a){
 
   int block;
 
-  if(level->use_cuda)cudaDeviceSynchronize(); // FIX !!!
+  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
