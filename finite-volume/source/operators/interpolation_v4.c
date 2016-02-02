@@ -357,6 +357,9 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
   if(nMessages>0){
     _timeStart = getTime();
     MPI_Waitall(nMessages,level_f->interpolation.requests,level_f->interpolation.status);
+  #ifdef SYNC_DEVICE_AFTER_WAITALL
+    cudaDeviceSynchronize();
+  #endif
     _timeEnd = getTime();
     level_f->timers.interpolation_wait += (_timeEnd-_timeStart);
   }

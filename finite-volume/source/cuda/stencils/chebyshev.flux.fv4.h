@@ -26,13 +26,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#if BLOCKCOPY_TILE_I == 10000
-#error GPU code only supports 3D tiling, please specify BLOCKCOPY_TILE_I
-#endif
-
-// enforce min 50% occupancy on Kepler/Maxwell
-#define RESIDUAL_MIN_BLOCKS_PER_SM         (2048 / 2 / (BLOCKCOPY_TILE_I * BLOCKCOPY_TILE_J))
-
 //------------------------------------------------------------------------------------------------------------------------------
 template<int LOG_DIM_I, int BLOCK_I, int BLOCK_J, int BLOCK_K>
 //__launch_bounds__((BLOCKCOPY_TILE_I * BLOCKCOPY_TILE_J), RESIDUAL_MIN_BLOCKS_PER_SM)
@@ -174,77 +167,22 @@ __global__ void chebyshev_kernel(level_type level, int x_id, int rhs_id, double 
       } // kdim
 }
 
-
 //------------------------------------------------------------------------------------------------------------------------------
-// kernel declaration with specified level info and block sizes
-#define CHEBY_KERNEL_TILE(log_dim_i, block_i, block_j, block_k) \
-  chebyshev_kernel<log_dim_i,block_i,block_j,block_k><<<dim3(num_blocks,(block_dim_k+block_k-1)/block_k),dim3(block_i,block_j),(block_i+1)*(BLOCKCOPY_TILE_J+1)*(4)*sizeof(double)>>>(level,x_id,rhs_id,a,b,s,chebyshev_c1,chebyshev_c2);
-
-// select appropriate block size
-#define CHEBY_KERNEL(log_dim_i) \
-  if(block_dim_i == BLOCKCOPY_TILE_I) { \
-    CHEBY_KERNEL_TILE(log_dim_i, BLOCKCOPY_TILE_I, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-  } \
-  else { \
-    if(block_dim_i <= 1)        CHEBY_KERNEL_TILE(log_dim_i,   1, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else if(block_dim_i <= 2)   CHEBY_KERNEL_TILE(log_dim_i,   2, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else if(block_dim_i <= 4)   CHEBY_KERNEL_TILE(log_dim_i,   4, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else if(block_dim_i <= 8)   CHEBY_KERNEL_TILE(log_dim_i,   8, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else if(block_dim_i <= 16)  CHEBY_KERNEL_TILE(log_dim_i,  16, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else if(block_dim_i <= 32)  CHEBY_KERNEL_TILE(log_dim_i,  32, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else if(block_dim_i <= 64)  CHEBY_KERNEL_TILE(log_dim_i,  64, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else if(block_dim_i <= 128) CHEBY_KERNEL_TILE(log_dim_i, 128, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else if(block_dim_i <= 256) CHEBY_KERNEL_TILE(log_dim_i, 256, BLOCKCOPY_TILE_J, BLOCKCOPY_TILE_K) \
-    else printf("ERROR: this tile dimension is not supported in the GPU path, please update the macros!\n"); \
-  }
-
-// maximum supported level can have 2^10 dimension
-#define CHEBY_KERNEL_DETECT_LEVEL(log_dim_i) \
-  switch(log_dim_i) { \
-    case 0: { CHEBY_KERNEL(0) break; } \
-    case 1: { CHEBY_KERNEL(1) break; } \
-    case 2: { CHEBY_KERNEL(2) break; } \
-    case 3: { CHEBY_KERNEL(3) break; } \
-    case 4: { CHEBY_KERNEL(4) break; } \
-    case 5: { CHEBY_KERNEL(5) break; } \
-    case 6: { CHEBY_KERNEL(6) break; } \
-    case 7: { CHEBY_KERNEL(7) break; } \
-    case 8: { CHEBY_KERNEL(8) break; } \
-    case 9: { CHEBY_KERNEL(9) break; } \
-    case 10: { CHEBY_KERNEL(10) break; } \
-    default: { printf("ERROR: this level size is not supported in the GPU path, please update the macros!\n"); } \
-  }
+#define STENCIL_KERNEL(log_dim_i, block_i, block_j, block_k) \
+  chebyshev_kernel<log_dim_i, block_i, block_j, block_k><<<num_blocks, dim3(block_i,block_j), (block_i+1)*(BLOCKCOPY_TILE_J+1)*(4)*sizeof(double)>>>(level, x_id, rhs_id, a, b, s, chebyshev_c1, chebyshev_c2);
 
 extern "C"
-void cuda_cheby_smooth(level_type level, int x_id, int rhs_id, double a, double b, int s, double *chebyshev_c1, double *chebyshev_c2)
+void cuda_smooth(level_type level, int x_id, int rhs_id, double a, double b, int s, double *c, double *d)
 {
-  int num_blocks = level.num_my_blocks;
+  int num_blocks = level.num_my_blocks; if(num_blocks<=0) return;
   int log_dim_i = (int)log2((double)level.dim.i);
   int block_dim_i = min(level.box_dim, BLOCKCOPY_TILE_I);
   int block_dim_k = min(level.box_dim, BLOCKCOPY_TILE_K);
 
+  CUDA_PROFILER_START_ON_LEVEL(log_dim_i==8)
 
-  // start profiling for finest level...
-  //if(log_dim_i==8) cudaProfilerStart();
+  STENCIL_KERNEL_LEVEL(log_dim_i)
+  CUDA_ERROR
 
-  CHEBY_KERNEL_DETECT_LEVEL(log_dim_i)
-/*
-  // stop profiling for finest level...
-  if(log_dim_i==8){
-    cudaProfilerStop();
-    cudaDeviceReset();
-    exit(0);
-  }*/
+  CUDA_PROFILER_STOP_ON_LEVEL(log_dim_i==8)
 }
-
-
-/*
-extern "C"
-void cuda_cheby_smooth(level_type level, int x_id, int rhs_id, double a, double b, int s, double *c1, double *c2)
-{
-  dim3 block(BLOCKCOPY_TILE_I,BLOCKCOPY_TILE_J);
-  int grid = level.num_my_blocks;
-
-  chebyshev_kernel<<<grid,block>>>(level,x_id,rhs_id,a,b,s,c1,c2);
-}
-*/

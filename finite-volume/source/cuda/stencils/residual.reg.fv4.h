@@ -41,7 +41,7 @@ __global__ void residual_kernel(level_type level, int res_id, int x_id, int rhs_
   const int box = level.my_blocks[blockIdx.x].read.box;
   const int ilo = level.my_blocks[blockIdx.x].read.i;
   const int jlo = level.my_blocks[blockIdx.x].read.j;
-  const int klo = level.my_blocks[blockIdx.x].read.k + BLOCK_K*blockIdx.y;
+  const int klo = level.my_blocks[blockIdx.x].read.k;
   const int ghosts  = level.my_boxes[box].ghosts;
   const int jStride = level.my_boxes[box].jStride;
   const int kStride = level.my_boxes[box].kStride;
@@ -219,7 +219,7 @@ __global__ void residual_kernel(level_type level, int res_id, int x_id, int rhs_
 //------------------------------------------------------------------------------------------------------------------------------
 #undef  STENCIL_KERNEL
 #define STENCIL_KERNEL(log_dim_i, block_i, block_j, block_k) \
-  residual_kernel<log_dim_i, block_i, block_j, block_k, 0><<<dim3(num_blocks, (block_dim_k+block_k-1)/block_k), dim3(block_i, block_j)>>>(level, res_id, x_id, rhs_id, a, b);
+  residual_kernel<log_dim_i, block_i, block_j, block_k, 0><<<num_blocks, dim3(block_i, block_j)>>>(level, res_id, x_id, rhs_id, a, b);
 
 extern "C"
 void cuda_residual(level_type level, int res_id, int x_id, int rhs_id, double a, double b)
@@ -235,7 +235,7 @@ void cuda_residual(level_type level, int res_id, int x_id, int rhs_id, double a,
 
 #undef  STENCIL_KERNEL
 #define STENCIL_KERNEL(log_dim_i, block_i, block_j, block_k) \
-  residual_kernel<log_dim_i, block_i, block_j, block_k, 1><<<dim3(num_blocks, (block_dim_k+block_k-1)/block_k), dim3(block_i, block_j)>>>(level, sumAbsAij_id, x_id, Aii_id, a, b);
+  residual_kernel<log_dim_i, block_i, block_j, block_k, 1><<<num_blocks, dim3(block_i, block_j)>>>(level, sumAbsAij_id, x_id, Aii_id, a, b);
 
 extern "C"
 void cuda_rebuild(level_type level, int x_id, int Aii_id, int sumAbsAij_id, double a, double b)

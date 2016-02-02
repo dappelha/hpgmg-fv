@@ -9,9 +9,9 @@ NVCC=`which nvcc`
 CUDA_ARCH+="-gencode code=sm_35,arch=compute_35 "
 
 # main tile size
-OPTS+="-DBLOCKCOPY_TILE_I=64 "
-OPTS+="-DBLOCKCOPY_TILE_J=2 "
-OPTS+="-DBLOCKCOPY_TILE_K=8 "
+OPTS+="-DBLOCKCOPY_TILE_I=32 "
+OPTS+="-DBLOCKCOPY_TILE_J=4 "
+OPTS+="-DBLOCKCOPY_TILE_K=16 "
 
 # special tile size for boundary conditions
 OPTS+="-DBOUNDARY_TILE_I=64 "
@@ -46,6 +46,9 @@ OPTS+="-DUSE_TEX "
 #OPTS+="-DUSE_PROFILE "
 #OPTS+="-DUSE_NVTX "
 #OPTS+="-DUSE_ERROR "
+
+# Cray-specific: synchronize device after MPI_Waitall
+OPTS+="-DSYNC_DEVICE_AFTER_WAITALL "
 
 # override MVAPICH flags for C++
 OPTS+="-DMPICH_IGNORE_CXX_SEEK "

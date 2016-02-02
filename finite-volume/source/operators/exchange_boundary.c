@@ -23,8 +23,9 @@ void exchange_boundary(level_type * level, int id, int shape){
   MPI_Request *recv_requests = level->exchange_ghosts[shape].requests;
   MPI_Request *send_requests = level->exchange_ghosts[shape].requests + level->exchange_ghosts[shape].num_recvs;
 
-  // this is only necessary if recv_buffers below are allocated with cudaMallocManaged and we're running on Kepler (since we cannot access managed memory concurrently)
-  //if(level->use_cuda)cudaDeviceSynchronize();	
+  // TODO: investigate why this is necessary for multi-GPU runs
+  if(level->use_cuda && (level->num_ranks > 1))
+    cudaDeviceSynchronize();
 
   // loop through packed list of MPI receives and prepost Irecv's...
   if(level->exchange_ghosts[shape].num_recvs>0){
@@ -109,7 +110,9 @@ void exchange_boundary(level_type * level, int id, int shape){
   if(nMessages){
     _timeStart = getTime();
     MPI_Waitall(nMessages,level->exchange_ghosts[shape].requests,level->exchange_ghosts[shape].status);
-    //cudaDeviceSynchronize();  // this is not necessary
+  #ifdef SYNC_DEVICE_AFTER_WAITALL
+    cudaDeviceSynchronize();
+  #endif
     _timeEnd = getTime();
     level->timers.ghostZone_wait += (_timeEnd-_timeStart);
   }

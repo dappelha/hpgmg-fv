@@ -7,11 +7,12 @@ NVCC=`which nvcc`
 
 # set gpu architectures to compile for
 CUDA_ARCH+="-gencode code=sm_35,arch=compute_35 "
-CUDA_ARCH+="-gencode code=sm_52,arch=compute_52 "
+#CUDA_ARCH+="-gencode code=sm_37,arch=compute_37 "
+#CUDA_ARCH+="-gencode code=sm_52,arch=compute_52 "
 
 # main tile size
-OPTS+="-DBLOCKCOPY_TILE_I=64 "
-OPTS+="-DBLOCKCOPY_TILE_J=2 "
+OPTS+="-DBLOCKCOPY_TILE_I=32 "
+OPTS+="-DBLOCKCOPY_TILE_J=4 "
 OPTS+="-DBLOCKCOPY_TILE_K=8 "
 
 # special tile size for boundary conditions

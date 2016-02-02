@@ -4,11 +4,11 @@ export CUDA_MANAGED_FORCE_DEVICE_ALLOC=1
 # number of CPU threads executing coarse levels
 export OMP_NUM_THREADS=4
 
-# Single
+# enable threads for MVAPICH
+export MV2_ENABLE_AFFINITY=0
+
+# Single GPU
 ./build/bin/hpgmg-fv 7 8
 
-# MPI
+# MPI, one rank per GPU
 #mpirun -np 2 ./build/bin/hpgmg-fv 7 8
-
-# CUDA-aware MPI
-#mpirun -np 2 -env MV2_USE_CUDA 1 -env MV2_CPU_MAPPING 1:2 ./build/bin/hpgmg-fv 7 8

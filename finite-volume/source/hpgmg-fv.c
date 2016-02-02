@@ -58,13 +58,6 @@ int cudaCheckPeerToPeer(int rank){
   // print only for 10 first ranks
   if (rank < 10) printf("rank %d:  Number of visible GPUs:  %d\n",rank,ndev); // Too verbose at scale
 
-  // print device properties, only for rank 0
-  for(int i=0;i<ndev;i++) {
-    struct cudaDeviceProp devProp;
-    cudaGetDeviceProperties(&devProp,i);
-    if (rank < 1) printf("rank %d:  GPU%d name %s\n",rank,i,devProp.name);
-  }
-
   // check for peer to peer mappings
   // print only for rank 0
   for(int i=0;i<ndev;i++)
@@ -72,9 +65,9 @@ int cudaCheckPeerToPeer(int rank){
     struct cudaDeviceProp devPropi,devPropj;
     cudaGetDeviceProperties(&devPropi,i);
     cudaGetDeviceProperties(&devPropj,j);
-
     cudaDeviceCanAccessPeer(&peer,i,j);
-    if (rank < 1) printf("rank %d:  Peer access from %s (GPU%d) -> %s (GPU%d) : %s\n",rank,devPropi.name,i,devPropj.name,j,peer?"Yes":"No"); // Too verbose at scale
+    // this info can also be collected with nvidia-smi topo -m
+    //printf("rank %d:  Peer access from %s (GPU%d) -> %s (GPU%d) : %s\n",rank,devPropi.name,i,devPropj.name,j,peer?"Yes":"No"); // Too verbose at scale
   }
   return ndev;
 }
@@ -172,7 +165,13 @@ int main(int argc, char **argv){
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   // Set CUDA device for this rank...
   num_devices = cudaCheckPeerToPeer(my_rank);
-  cudaSetDevice(my_rank % num_devices);
+  int my_device = my_rank % num_devices;
+  cudaSetDevice(my_device);
+  if (my_rank < 10) {
+    struct cudaDeviceProp devProp;
+    cudaGetDeviceProperties(&devProp, my_device);
+    printf("rank %d:  Selecting device %d (%s)\n",my_rank,my_device,devProp.name);
+  }
   #ifdef USE_SHM
   cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
   cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);

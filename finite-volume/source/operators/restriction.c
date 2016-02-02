@@ -193,7 +193,9 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   if(nMessages){
     _timeStart = getTime();
     MPI_Waitall(nMessages,level_f->restriction[restrictionType].requests,level_f->restriction[restrictionType].status);
-    //cudaDeviceSynchronize(); // this is not necessary
+  #ifdef SYNC_DEVICE_AFTER_WAITALL
+    cudaDeviceSynchronize();
+  #endif
     _timeEnd = getTime();
     level_f->timers.restriction_wait += (_timeEnd-_timeStart);
   }
