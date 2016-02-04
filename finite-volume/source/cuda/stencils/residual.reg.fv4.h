@@ -28,6 +28,7 @@
 
 //------------------------------------------------------------------------------------------------------------------------------
 template<int LOG_DIM_I, int BLOCK_I, int BLOCK_J, int BLOCK_K, int REBUILD>
+__launch_bounds__(128, 4) // force 25% occupancy on Kepler/Maxwell
 __global__ void residual_kernel(level_type level, int res_id, int x_id, int rhs_id, double a, double b){
   const int idim = level.my_blocks[blockIdx.x].dim.i;
   const int jdim = level.my_blocks[blockIdx.x].dim.j;
