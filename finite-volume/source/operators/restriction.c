@@ -101,9 +101,6 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   int n;
   int my_tag = (level_f->tag<<4) | 0x5;
 
-  if (!level_c->use_cuda && level_f->use_cuda)
-    cudaDeviceSynchronize();  // switchover point: must synchronize GPU before running restriction on CPU
-
   #ifdef USE_MPI
   // by convention, level_f allocates a combined array of requests for both level_f sends and level_c recvs...
   int nMessages = level_c->restriction[restrictionType].num_recvs + level_f->restriction[restrictionType].num_sends;
@@ -134,7 +131,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // pack MPI send buffers...
   if(level_f->restriction[restrictionType].num_blocks[0]>0){
     _timeStart = getTime();
-    if(level_c->use_cuda) {
+    if(level_f->use_cuda) {
       cuda_restriction(*level_c,id_c,*level_f,id_f,level_f->restriction[restrictionType],restrictionType,0);
       cudaDeviceSynchronize(); // synchronize so the CPU sees the updated buffers which will be used for MPI transfers
     }
@@ -174,8 +171,9 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
   // perform local restriction[restrictionType]... try and hide within Isend latency... 
   if(level_f->restriction[restrictionType].num_blocks[1]>0){
     _timeStart = getTime();
-    if (level_c->use_cuda) {
+    if (level_f->use_cuda) {
       cuda_restriction(*level_c, id_c, *level_f, id_f, level_f->restriction[restrictionType], restrictionType, 1);
+      if (!level_c->use_cuda) cudaDeviceSynchronize();  // switchover point: must synchronize GPU
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[1])
