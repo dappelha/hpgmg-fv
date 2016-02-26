@@ -21,9 +21,6 @@ OPTS+="-DBOUNDARY_TILE_K=16 "
 # host level threshold: number of grid elements
 OPTS+="-DHOST_LEVEL_SIZE_THRESHOLD=10000 "
 
-# use naive interpolation in fv2
-OPTS+="-DUSE_NAIVE_INTERP "
-
 # max number of solves after warmup
 #OPTS+="-DMAX_SOLVES=10 "
 
@@ -47,8 +44,8 @@ OPTS+="-DUSE_TEX "
 #OPTS+="-DUSE_NVTX "
 #OPTS+="-DUSE_ERROR "
 
-# Cray-specific: synchronize device after MPI_Waitall
-OPTS+="-DSYNC_DEVICE_AFTER_WAITALL "
+# synchronize device after MPI_Waitall
+#OPTS+="-DSYNC_DEVICE_AFTER_WAITALL "
 
 # override MVAPICH flags for C++
 OPTS+="-DMPICH_IGNORE_CXX_SEEK "
