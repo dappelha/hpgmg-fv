@@ -384,7 +384,7 @@ int main(int argc, char **argv){
       double DOF = (double)MG_h.levels[l]->dim.i*(double)MG_h.levels[l]->dim.j*(double)MG_h.levels[l]->dim.k;
       double seconds = SecondsPerCycle*(double)AverageSolveTime[l];
       double DOFs = DOF / seconds;
-      fprintf(stdout,"  h=%0.15e  DOF=%0.15e  time=%0.6f  DOF/s=%0.3e  MPI=%d  OMP=%d\n",MG_h.levels[l]->h,DOF,seconds,DOFs,num_tasks,OMP_Threads);
+      fprintf(stdout,"  h=%0.15e  DOF=%0.15e  time=%0.6f  DOF/s=%0.3e  MPI=%d  OMP=%d  ACC=1\n",MG_h.levels[l]->h,DOF,seconds,DOFs,num_tasks,OMP_Threads);
     }
   }
   #endif
