@@ -1,15 +1,8 @@
- HPGMG: High-performance Geometric Multigrid
+HPGMG: High-performance Geometric Multigrid
 ===========================================
 
 This is a heterogeneous implementation of HPGMG-FV using CUDA with Unified
-Memory. The code is multi-GPU ready and uses one rank per GPU.
-
-HPGMG implements full multigrid (FMG) algorithms using finite-volume and
-finite-element methods.  Different algorithmic variants adjust the arithmetic
-intensity and architectural properties that are tested. These FMG methods
-converge up to discretization error in one F-cycle, thus may be considered
-direct solvers.  An F-cycle visits the finest level a total of two times, the
-first coarsening (8x smaller) 4 times, the second coarsening 6 times, etc.
+Memory. The code is multi-GPU ready and uses one rank per GPU. Read [my Parallel Forall blog post](https://devblogs.nvidia.com/parallelforall/high-performance-geometric-multi-grid-gpu-acceleration/) to learn more about the implementation!
 
 #General installation
 
