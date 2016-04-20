@@ -28,6 +28,10 @@ OPTS+="-DHOST_LEVEL_SIZE_THRESHOLD=10000 "
 OPTS+="-DCUDA_UM_ALLOC "
 OPTS+="-DCUDA_UM_ZERO_COPY "
 
+# MPI buffers allocation policy
+OPTS+="-DMPI_ALLOC_ZERO_COPY "
+#OPTS+="-DMPI_ALLOC_PINNED "
+
 # stencil kernel optimizations
 OPTS+="-DUSE_REG "
 OPTS+="-DUSE_TEX "
