@@ -31,6 +31,7 @@
 // CUB library is used for reductions
 #include "cub/cub.cuh"
 
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 600)
 __device__ double atomicAdd(double* address, double val)
 {
     unsigned long long int* address_as_ull = (unsigned long long int*)address;
@@ -44,6 +45,7 @@ __device__ double atomicAdd(double* address, double val)
     } while (assumed != old);
     return __longlong_as_double(old);
 }
+#endif
 
 __device__ double atomicMax(double* address, double val)
 {
@@ -100,7 +102,7 @@ __global__ void zero_vector_kernel(level_type level, int component_id)
       }
 }
 
-// this kernel provides a generic axpy/mul implementation: 
+// this kernel provides a generic axpy/mul implementation:
 // if mul_vectors = 1: c = scale_a * a * b
 // if mul_vectors = 0: c = scale_a * a + scale_b * b + shift_a
 template <int mul_vectors>
@@ -121,7 +123,7 @@ __global__ void axpy_vector_kernel(level_type level, int id_c, double scale_a, d
     double * __restrict__ grid_c = level.my_boxes[box].vectors[id_c] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_a = level.my_boxes[box].vectors[id_a] + ghosts*(1+jStride+kStride);
     double * __restrict__ grid_b = level.my_boxes[box].vectors[id_b] + ghosts*(1+jStride+kStride);
-   
+
     int dim_i = (ihi - ilo);
     int i = ilo + threadIdx.x % dim_i;
     if (i >= ihi) return;
@@ -197,7 +199,7 @@ __global__ void reduction_kernel(level_type level, int id, double *res)
 
     int dim_i = (ihi - ilo);
     int i = ilo + threadIdx.x % dim_i;
-    if (i < ihi) { 
+    if (i < ihi) {
       int j_block_stride = MISC_THREAD_BLOCK_SIZE / dim_i;
       for (int j = jlo + threadIdx.x / dim_i; j < jhi; j += j_block_stride)
         for (int k = klo; k < khi; k++) {
@@ -235,7 +237,7 @@ void cuda_zero_vector(level_type d_level, int id)
 
   zero_vector_kernel<<<grid, block>>>(d_level, id);
   CUDA_ERROR
-} 
+}
 
 extern "C"
 void cuda_scale_vector(level_type d_level, int id_c, double scale_a, int id_a)
