@@ -966,7 +966,7 @@ void MGBuild(mg_type *all_grids, level_type *fine_grid, double a, double b, int 
     if( (all_grids->levels[level]->boundary_condition.type==BC_PERIODIC) && ((a==0) || (alpha_is_zero==1)) )all_grids->levels[level]->must_subtract_mean = 1;
   }
 
-  cudaDeviceSynchronize();  // synchronize GPU at the end of the setup phase
+  CUCHK( cudaDeviceSynchronize() );  // synchronize GPU at the end of the setup phase
   all_grids->timers.MGBuild += (double)(getTime()-_timeStartMGBuild);
 }
 

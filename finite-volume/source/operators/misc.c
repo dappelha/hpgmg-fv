@@ -54,7 +54,7 @@ void initialize_valid_region(level_type * level){
   double _timeStart = getTime();
   int block;
 
-  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
+  if(level->use_cuda) CUCHK( cudaDeviceSynchronize() ); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
@@ -106,7 +106,7 @@ void init_vector(level_type * level, int id_a, double scalar){
   double _timeStart = getTime();
   int block;
 
-  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
+  if(level->use_cuda) CUCHK( cudaDeviceSynchronize() ); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
@@ -238,7 +238,7 @@ void invert_vector(level_type * level, int id_c, double scale_a, int id_a){
 
   int block;
 
-  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
+  if(level->use_cuda) CUCHK( cudaDeviceSynchronize() ); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){
@@ -318,7 +318,7 @@ double dot(level_type * level, int id_a, int id_b){
   int block;
   double a_dot_b_level =  0.0;
 
-  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
+  if(level->use_cuda) CUCHK( cudaDeviceSynchronize() ); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS_SUM(level,block,level->num_my_blocks,a_dot_b_level)
   for(block=0;block<level->num_my_blocks;block++){
@@ -576,7 +576,7 @@ void random_vector(level_type * level, int id_a){
   double _timeStart = getTime();
   int block;
 
-  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
+  if(level->use_cuda) CUCHK( cudaDeviceSynchronize() ); // FIX... no CUDA version... must sync CPU/GPU before using CPU version...
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){

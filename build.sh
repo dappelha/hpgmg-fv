@@ -24,7 +24,7 @@ OPTS+="-DBOUNDARY_TILE_K=16 "
 OPTS+="-DHOST_LEVEL_SIZE_THRESHOLD=10000 "
 
 # max number of solves after warmup
-#OPTS+="-DMAX_SOLVES=10 "
+OPTS+="-DMAX_SOLVES=10 "
 
 # unified memory allocation options
 OPTS+="-DCUDA_UM_ALLOC "

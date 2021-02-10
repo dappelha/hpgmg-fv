@@ -135,7 +135,7 @@ void rebuild_operator_blackbox(level_type * level, double a, double b, int color
   }}}
 
   // make sure GPU kernels have finished since the following part runs on CPU
-  cudaDeviceSynchronize();
+  CUCHK( cudaDeviceSynchronize() );
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // take Aii and the row sum sumAbsAij and calculate D^{-1} and L1^{-1}...

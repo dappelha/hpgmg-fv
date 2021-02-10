@@ -726,7 +726,9 @@ void build_exchange_ghosts(level_type *level, int shape){
 #if defined(MPI_ALLOC_PINNED)
              level->exchange_ghosts[shape].send_buffers[neighbor] = (double*)um_malloc_pinned(level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double), level->um_access_policy);
 	if (level->um_access_policy == UM_ACCESS_GPU)
-  cudaMemset(level->exchange_ghosts[shape].send_buffers[neighbor],                0,level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
+          CUCHK( cudaMemset(level->exchange_ghosts[shape].send_buffers[neighbor],
+                            0,
+                            level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double)) );
 	else
       memset(level->exchange_ghosts[shape].send_buffers[neighbor],                0,level->exchange_ghosts[shape].send_sizes[neighbor]*sizeof(double));
 #elif defined(MPI_ALLOC_ZERO_COPY)
@@ -923,7 +925,9 @@ void build_exchange_ghosts(level_type *level, int shape){
 #if defined(MPI_ALLOC_PINNED)
              level->exchange_ghosts[shape].recv_buffers[neighbor] = (double*)um_malloc_pinned(level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double), level->um_access_policy);
 	if (level->um_access_policy == UM_ACCESS_GPU)
-  cudaMemset(level->exchange_ghosts[shape].recv_buffers[neighbor],                0,level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
+          CUCHK( cudaMemset(level->exchange_ghosts[shape].recv_buffers[neighbor],
+                            0,
+                            level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double)) );
 	else
       memset(level->exchange_ghosts[shape].recv_buffers[neighbor],                0,level->exchange_ghosts[shape].recv_sizes[neighbor]*sizeof(double));
 #elif defined(MPI_ALLOC_ZERO_COPY)
@@ -1070,7 +1074,7 @@ void create_vectors(level_type *level, int numVectors){
     // allocate vectors individually (simple, but may cause conflict misses)
     double ** old_vectors = level->vectors;
     level->vectors = (double **)um_malloc(numVectors*sizeof(double*), level->um_access_policy);
-    cudaDeviceSynchronize();
+    CUCHK( cudaDeviceSynchronize() );
     uint64_t c;
     for(c=                0;c<level->numVectors;c++){level->vectors[c] = old_vectors[c];}
     for(c=level->numVectors;c<       numVectors;c++){
@@ -1457,15 +1461,15 @@ void *um_malloc(size_t size, int access_policy)
   void *ptr;
   switch (access_policy) {
   case UM_ACCESS_GPU:
-    CUDA_API_ERROR( cudaMallocManaged(&ptr, size, cudaMemAttachGlobal) )
+    CUCHK( cudaMallocManaged(&ptr, size, cudaMemAttachGlobal) )
     break;
   case UM_ACCESS_BOTH:
 #ifdef CUDA_UM_ZERO_COPY
     // assumes that the direct access to sysmem is supported on this OS/GPU
-    CUDA_API_ERROR( cudaMallocHost(&ptr, size) )
+    CUCHK( cudaMallocHost(&ptr, size) )
 #else
     // default is the managed allocation with global attach
-    CUDA_API_ERROR( cudaMallocManaged(&ptr, size, cudaMemAttachGlobal) )
+    CUCHK( cudaMallocManaged(&ptr, size, cudaMemAttachGlobal) )
 #endif
     break;
   case UM_ACCESS_CPU:
@@ -1485,10 +1489,10 @@ void *um_malloc_pinned(size_t size, int access_policy)
   void *ptr;
   switch (access_policy) {
   case UM_ACCESS_GPU:
-    CUDA_API_ERROR( cudaMalloc(&ptr, size) )
+    CUCHK( cudaMalloc(&ptr, size) )
     break;
   case UM_ACCESS_BOTH:
-    CUDA_API_ERROR( cudaMallocHost(&ptr, size) )
+    CUCHK( cudaMallocHost(&ptr, size) )
     break;
   case UM_ACCESS_CPU:
     return malloc(size);
@@ -1506,7 +1510,7 @@ void *um_realloc(void *ptr, size_t size, int access_policy)
   case UM_ACCESS_BOTH:
     new_ptr = um_malloc(size, access_policy);
     // realloc always happen from size/2 to size in HPGMG
-    CUDA_API_ERROR( cudaMemcpy(new_ptr, ptr, (size/2), cudaMemcpyDefault) )
+    CUCHK( cudaMemcpy(new_ptr, ptr, (size/2), cudaMemcpyDefault) )
     um_free(ptr, access_policy);
     break;
   case UM_ACCESS_CPU:
@@ -1525,13 +1529,13 @@ void um_free(void *ptr, int access_policy)
 #ifdef CUDA_UM_ALLOC
   switch(access_policy) {
   case UM_ACCESS_GPU:
-    CUDA_API_ERROR( cudaFree(ptr) )
+    CUCHK( cudaFree(ptr) )
     break;
   case UM_ACCESS_BOTH:
 #ifdef CUDA_UM_ZERO_COPY
-    CUDA_API_ERROR( cudaFreeHost(ptr) )
+    CUCHK( cudaFreeHost(ptr) )
 #else
-    CUDA_API_ERROR( cudaFree(ptr) )
+    CUCHK( cudaFree(ptr) )
 #endif
     break;
   case UM_ACCESS_CPU:
@@ -1547,10 +1551,10 @@ void um_free_pinned(void *ptr, int access_policy)
 {
   switch(access_policy) {
   case UM_ACCESS_GPU:
-    CUDA_API_ERROR( cudaFree(ptr) )
+    CUCHK( cudaFree(ptr) )
     break;
   case UM_ACCESS_BOTH:
-    CUDA_API_ERROR( cudaFreeHost(ptr) )
+    CUCHK( cudaFreeHost(ptr) )
     break;
   case UM_ACCESS_CPU:
     free(ptr);

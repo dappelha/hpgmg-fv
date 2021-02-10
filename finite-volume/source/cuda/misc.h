@@ -292,17 +292,17 @@ double cuda_sum(level_type d_level, int id)
 
   double *d_res;
   double h_res[1];
-  CUDA_API_ERROR( cudaMallocManaged((void**)&d_res, sizeof(double), cudaMemAttachGlobal) )
-  CUDA_API_ERROR( cudaMemsetAsync(d_res, 0, sizeof(double)) )
+  CUCHK( cudaMallocManaged((void**)&d_res, sizeof(double), cudaMemAttachGlobal) )
+  CUCHK( cudaMemsetAsync(d_res, 0, sizeof(double)) )
 
   reduction_kernel<0><<<grid, block>>>(d_level, id, d_res);
   CUDA_ERROR
 
   // sync here to guarantee that the result is updated on GPU
-  CUDA_API_ERROR( cudaDeviceSynchronize() )
+  CUCHK( cudaDeviceSynchronize() )
   h_res[0] = d_res[0];
 
-  CUDA_API_ERROR( cudaFree(d_res) )
+  CUCHK( cudaFree(d_res) )
   return h_res[0];
 }
 
@@ -315,17 +315,17 @@ double cuda_max_abs(level_type d_level, int id)
 
   double *d_res;
   double h_res[1];
-  CUDA_API_ERROR( cudaMallocManaged((void**)&d_res, sizeof(double), cudaMemAttachGlobal) )
-  CUDA_API_ERROR( cudaMemsetAsync(d_res, 0, sizeof(double)) )
+  CUCHK( cudaMallocManaged((void**)&d_res, sizeof(double), cudaMemAttachGlobal) )
+  CUCHK( cudaMemsetAsync(d_res, 0, sizeof(double)) )
 
   reduction_kernel<1><<<grid, block>>>(d_level, id, d_res);
   CUDA_ERROR
 
   // sync here to guarantee that the result is updated on GPU
-  CUDA_API_ERROR( cudaDeviceSynchronize() )
+  CUCHK( cudaDeviceSynchronize() )
   h_res[0] = d_res[0];
 
-  CUDA_API_ERROR( cudaFree(d_res) )
+  CUCHK( cudaFree(d_res) )
   return h_res[0];
 }
 

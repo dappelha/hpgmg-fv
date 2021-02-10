@@ -299,7 +299,7 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
     _timeStart = getTime();
     if(level_c->use_cuda) {
       cuda_interpolation_v4(*level_f,id_f,0.0,*level_c,id_c,level_c->interpolation,0);
-      cudaDeviceSynchronize();  // synchronize so that CPU can see updated buffers
+      CUCHK( cudaDeviceSynchronize() );  // synchronize so that CPU can see updated buffers
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[0])
@@ -358,7 +358,7 @@ void interpolation_v4(level_type * level_f, int id_f, double prescale_f, level_t
     _timeStart = getTime();
     MPI_Waitall(nMessages,level_f->interpolation.requests,level_f->interpolation.status);
   #ifdef SYNC_DEVICE_AFTER_WAITALL
-    cudaDeviceSynchronize();
+    CUCHK( cudaDeviceSynchronize() );
   #endif
     _timeEnd = getTime();
     level_f->timers.interpolation_wait += (_timeEnd-_timeStart);

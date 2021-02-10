@@ -54,7 +54,7 @@ int cudaCheckPeerToPeer(int rank){
   int peer = 0;
 
   // query number of GPU devices in the system
-  cudaGetDeviceCount(&ndev);
+  CUCHK( cudaGetDeviceCount(&ndev) );
   // print only for 10 first ranks
   if (rank < 10) printf("rank %d:  Number of visible GPUs:  %d\n",rank,ndev); // Too verbose at scale
 
@@ -63,9 +63,9 @@ int cudaCheckPeerToPeer(int rank){
   for(int i=0;i<ndev;i++)
   for(int j=i+1;j<ndev;j++){
     struct cudaDeviceProp devPropi,devPropj;
-    cudaGetDeviceProperties(&devPropi,i);
-    cudaGetDeviceProperties(&devPropj,j);
-    cudaDeviceCanAccessPeer(&peer,i,j);
+    CUCHK( cudaGetDeviceProperties(&devPropi,i) );
+    CUCHK( cudaGetDeviceProperties(&devPropj,j) );
+    CUCHK( cudaDeviceCanAccessPeer(&peer,i,j) );
     // this info can also be collected with nvidia-smi topo -m
     //printf("rank %d:  Peer access from %s (GPU%d) -> %s (GPU%d) : %s\n",rank,devPropi.name,i,devPropj.name,j,peer?"Yes":"No"); // Too verbose at scale
   }
@@ -168,17 +168,17 @@ int main(int argc, char **argv){
   // Set CUDA device for this rank...
   num_devices = cudaCheckPeerToPeer(my_rank);
   int my_device = my_rank % num_devices;
-  cudaSetDevice(my_device);
+  CUCHK(cudaSetDevice(my_device));
   if (my_rank < 10) {
     struct cudaDeviceProp devProp;
-    cudaGetDeviceProperties(&devProp, my_device);
+    CUCHK(cudaGetDeviceProperties(&devProp, my_device));
     printf("rank %d:  Selecting device %d (%s)\n",my_rank,my_device,devProp.name);
   }
   #ifdef USE_SHM
-  cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
-  cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
+  CUCHK(cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte));
+  CUCHK(cudaDeviceSetCacheConfig(cudaFuncCachePreferShared));
   #else
-  cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+  CUCHK(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
   #endif
   #ifdef USE_HPM // IBM HPM counters for BGQ...
   HPM_Init();

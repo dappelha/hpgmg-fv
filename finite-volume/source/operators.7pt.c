@@ -220,7 +220,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   exchange_boundary(level,VECTOR_BETA_K,STENCIL_SHAPE_BOX);
 
   // make sure that the GPU kernels are completed as the following part will run on CPU
-  cudaDeviceSynchronize();
+  CUCHK( cudaDeviceSynchronize() );
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // calculate Dinv, L1inv, and estimate the dominant Eigenvalue
@@ -330,7 +330,7 @@ void rebuild_operator(level_type * level, level_type *fromLevel, double a, doubl
   exchange_boundary(level,VECTOR_L1INV,STENCIL_SHAPE_BOX);
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // make sure that boundary data is updated on gpu
-  cudaDeviceSynchronize();
+  CUCHK( cudaDeviceSynchronize() );
 }
 
 

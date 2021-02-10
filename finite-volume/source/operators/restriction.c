@@ -133,7 +133,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
     _timeStart = getTime();
     if(level_f->use_cuda) {
       cuda_restriction(*level_c,id_c,*level_f,id_f,level_f->restriction[restrictionType],restrictionType,0);
-      cudaDeviceSynchronize(); // synchronize so the CPU sees the updated buffers which will be used for MPI transfers
+      CUCHK( cudaDeviceSynchronize() ); // synchronize so the CPU sees the updated buffers which will be used for MPI transfers
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[0])
@@ -173,7 +173,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
     _timeStart = getTime();
     if (level_f->use_cuda) {
       cuda_restriction(*level_c, id_c, *level_f, id_f, level_f->restriction[restrictionType], restrictionType, 1);
-      if (!level_c->use_cuda) cudaDeviceSynchronize();  // switchover point: must synchronize GPU
+      if (!level_c->use_cuda) CUCHK( cudaDeviceSynchronize() );  // switchover point: must synchronize GPU
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_f->restriction[restrictionType].num_blocks[1])
@@ -192,7 +192,7 @@ void restriction(level_type * level_c, int id_c, level_type *level_f, int id_f, 
     _timeStart = getTime();
     MPI_Waitall(nMessages,level_f->restriction[restrictionType].requests,level_f->restriction[restrictionType].status);
   #ifdef SYNC_DEVICE_AFTER_WAITALL
-    cudaDeviceSynchronize();
+    CUCHK( cudaDeviceSynchronize() );
   #endif
     _timeEnd = getTime();
     level_f->timers.restriction_wait += (_timeEnd-_timeStart);

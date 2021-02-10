@@ -63,31 +63,26 @@
 
 //------------------------------------------------------------------------------------------------------------------------------
 // CUDA errors
-#ifdef USE_ERROR
-#include <execinfo.h>
 // wrapper for CUDA API errors
-#define CUDA_API_ERROR(func) { \
+#include <execinfo.h>
+#define CUCHK(func) { \
   cudaError_t status = func; \
   if (status != cudaSuccess) { \
-    printf("CUDA ERROR in %s, line %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(status)); \
-    void *callstack[128]; \
-    int frames = backtrace(callstack, 128); \
-    char **strs = backtrace_symbols(callstack, frames); \
-    for (int i = 0; i < frames; i++) \
-      printf("[bt] %s\n", strs[i]); \
-    free(strs); \
-    cudaDeviceReset(); \
-    exit(-1); \
+  printf("CUDA ERROR in %s, line %d: %s\n", __FILE__, __LINE__, cudaGetErrorString(status)); \
+  void *callstack[128]; \
+  int frames = backtrace(callstack, 128); \
+  char **strs = backtrace_symbols(callstack, frames); \
+  for (int i = 0; i < frames; i++) \
+    printf("[bt] %s\n", strs[i]); \
+  free(strs); \
+  cudaDeviceReset(); \
+  exit(-1); \
   } \
-}
+  }
 // wrapper for CUDA kernel errors
 #define CUDA_ERROR 	     { \
-  CUDA_API_ERROR( cudaDeviceSynchronize() ); \
+  CUCHK( cudaGetLastError() ); \
 }
-#else
-#define CUDA_API_ERROR(func) { func; }
-#define CUDA_ERROR           { }
-#endif
 
 //------------------------------------------------------------------------------------------------------------------------------
 // Template stencil kernels at different levels

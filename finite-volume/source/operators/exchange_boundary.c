@@ -25,7 +25,7 @@ void exchange_boundary(level_type * level, int id, int shape){
 
   // TODO: investigate why this is necessary for multi-GPU runs
   if(level->use_cuda && (level->num_ranks > 1))
-    cudaDeviceSynchronize();
+    CUCHK( cudaDeviceSynchronize() );
 
   NVTX_PUSH("exchange_boundary", 1);
   
@@ -55,7 +55,7 @@ void exchange_boundary(level_type * level, int id, int shape){
     _timeStart = getTime();
     if(level->use_cuda) {
       cuda_copy_block(*level,id,level->exchange_ghosts[shape],0);
-      cudaDeviceSynchronize();	// synchronize so the CPU sees the updated buffers which will be used for MPI transfers
+      CUCHK( cudaDeviceSynchronize() );	// synchronize so the CPU sees the updated buffers which will be used for MPI transfers
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[shape].num_blocks[0])
@@ -115,7 +115,7 @@ void exchange_boundary(level_type * level, int id, int shape){
     MPI_Waitall(nMessages,level->exchange_ghosts[shape].requests,level->exchange_ghosts[shape].status);
     NVTX_POP
   #ifdef SYNC_DEVICE_AFTER_WAITALL
-    cudaDeviceSynchronize();
+      CUCHK( cudaDeviceSynchronize() );
   #endif
     _timeEnd = getTime();
     level->timers.ghostZone_wait += (_timeEnd-_timeStart);
@@ -128,7 +128,7 @@ void exchange_boundary(level_type * level, int id, int shape){
     if(level->use_cuda) {
       cuda_copy_block(*level,id,level->exchange_ghosts[shape],2);
 #ifdef USE_NVTX
-      cudaDeviceSynchronize();
+      CUCHK( cudaDeviceSynchronize() );
 #endif      
     }
     else {

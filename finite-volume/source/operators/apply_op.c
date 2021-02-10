@@ -15,7 +15,7 @@ void apply_op(level_type * level, int Ax_id, int x_id, double a, double b){
   double _timeStart = getTime();
   int block;
 
-  if(level->use_cuda)cudaDeviceSynchronize(); // FIX... wait for any other GPU operations on this level to complete
+  if(level->use_cuda) CUCHK( cudaDeviceSynchronize() ); // FIX... wait for any other GPU operations on this level to complete
 
   PRAGMA_THREAD_ACROSS_BLOCKS(level,block,level->num_my_blocks)
   for(block=0;block<level->num_my_blocks;block++){

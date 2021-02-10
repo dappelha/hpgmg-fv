@@ -110,7 +110,7 @@ void interpolation_p1(level_type * level_f, int id_f, double prescale_f, level_t
     _timeStart = getTime();
     if(level_f->use_cuda) {
       cuda_interpolation_p1(*level_f,id_f,0.0,*level_c,id_c,level_c->interpolation,0);
-      cudaDeviceSynchronize(); // synchronize so the CPU sees the updated buffers
+      CUCHK( cudaDeviceSynchronize() ); // synchronize so the CPU sees the updated buffers
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level_f,buffer,level_c->interpolation.num_blocks[0])
