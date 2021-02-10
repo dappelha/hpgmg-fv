@@ -42,7 +42,6 @@
 #include <cuda_profiler_api.h>
 #include "nvToolsExt.h"
 #define NVTX_PUSH(name,cid) { \
-        cudaDeviceSynchronize(); \
 	uint32_t colors[] = { 0x0000ff00, 0x000000ff, 0x00ffff00, 0x00ff00ff, 0x0000ffff, 0x00ff0000, 0x00ffffff }; \
 	int num_colors = sizeof(colors)/sizeof(uint32_t); \
 	int color_id = cid; \
@@ -56,7 +55,7 @@
 	eventAttrib.message.ascii = name; \
 	nvtxRangePushEx(&eventAttrib); \
 }
-#define NVTX_POP { cudaDeviceSynchronize(); nvtxRangePop(); }
+#define NVTX_POP { nvtxRangePop(); }
 #else
 #define NVTX_PUSH(name,cid) {}
 #define NVTX_POP {}

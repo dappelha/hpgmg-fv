@@ -23,6 +23,7 @@
 #include "operators.h"
 #include "solvers.h"
 #include "mg.h"
+#include "cuda/common.h"
 //------------------------------------------------------------------------------------------------------------------------------
 // structs/routines used to construct the restriction and prolognation lists and ensure a convention on how data is ordered within an MPI buffer
 typedef struct {
@@ -1063,6 +1064,11 @@ void richardson_error(mg_type *all_grids, int levelh, int u_id){
 //------------------------------------------------------------------------------------------------------------------------------
 void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int level){
   if(!all_grids->levels[level]->active)return;
+#ifdef USE_NVTX
+  char msg[5];
+  sprintf(msg, "V%d", level);
+  NVTX_PUSH(msg,1);
+#endif  
   double _LevelStart;
 
   // bottom solve...
@@ -1070,6 +1076,7 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
     double _timeBottomStart = getTime();
     IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,MG_DEFAULT_BOTTOM_NORM);
     all_grids->levels[level]->timers.Total += (double)(getTime()-_timeBottomStart);
+    NVTX_POP;
     return;
   }
 
@@ -1090,6 +1097,7 @@ void MGVCycle(mg_type *all_grids, int e_id, int R_id, double a, double b, int le
                 smooth(all_grids->levels[level  ],e_id,R_id,a,b);
 
   all_grids->levels[level]->timers.Total += (double)(getTime()-_LevelStart);
+  NVTX_POP;
 }
 
 
@@ -1196,6 +1204,7 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // calculate norm of f...
+  NVTX_PUSH("F-norm",1);
   double _LevelStart = getTime();
   double norm_of_F     = 1.0;
   double norm_of_DinvF = 1.0;
@@ -1204,46 +1213,61 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
     norm_of_DinvF = norm(all_grids->levels[onLevel],VECTOR_TEMP);		// ||D^{-1}F||
   }
   if(rtol>0)norm_of_F = norm(all_grids->levels[onLevel],F_id);			// ||F||
+  NVTX_POP;
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // initialize the RHS for the f-cycle to f...
+  NVTX_PUSH("init",1);
   scale_vector(all_grids->levels[onLevel],R_id,1.0,F_id);              // R_id = F_id
   all_grids->levels[onLevel]->timers.Total += (double)(getTime()-_LevelStart);
+  NVTX_POP;
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // restrict RHS to bottom (coarsest grids)
+  NVTX_PUSH("restrict", 1);
   for(level=onLevel;level<(all_grids->num_levels-1);level++){
     double _LevelStart = getTime();
     restriction(all_grids->levels[level+1],R_id,all_grids->levels[level],R_id,RESTRICT_CELL);
     all_grids->levels[level]->timers.Total += (double)(getTime()-_LevelStart);
   }
+  NVTX_POP;
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // solve coarsest grid...
-    double _timeBottomStart = getTime();
-    level = all_grids->num_levels-1;
-    if(level>onLevel)zero_vector(all_grids->levels[level],e_id);//else use whatever was the initial guess
-    IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,MG_DEFAULT_BOTTOM_NORM);  // -1 == exact solution
-    all_grids->levels[level]->timers.Total += (double)(getTime()-_timeBottomStart);
-
+  NVTX_PUSH("coarse solve", 1);
+  double _timeBottomStart = getTime();
+  level = all_grids->num_levels-1;
+  if(level>onLevel)zero_vector(all_grids->levels[level],e_id);//else use whatever was the initial guess
+  IterativeSolver(all_grids->levels[level],e_id,R_id,a,b,MG_DEFAULT_BOTTOM_NORM);  // -1 == exact solution
+  all_grids->levels[level]->timers.Total += (double)(getTime()-_timeBottomStart);
+  NVTX_POP;
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // now do the F-cycle proper...
   for(level=all_grids->num_levels-2;level>=onLevel;level--){
+#ifdef USE_NVTX
+    char msg[5];
+    sprintf(msg, "F%d", level);
+    NVTX_PUSH(msg, 1);
+#endif    
     // high-order interpolation
     _LevelStart = getTime();
+    NVTX_PUSH("interpolation",1);
     interpolation_fcycle(all_grids->levels[level],e_id,0.0,all_grids->levels[level+1],e_id);
+    NVTX_POP;
     all_grids->levels[level]->timers.Total += (double)(getTime()-_LevelStart);
 
     // v-cycle
     all_grids->levels[level]->vcycles_from_this_level++;
     MGVCycle(all_grids,e_id,R_id,a,b,level);
+    NVTX_POP;
   }
 
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   // now do the post-F V-cycles
+  NVTX_PUSH("post-F V-cycle", 1);
   for(v=-1;v<maxVCycles;v++){
     int level = onLevel;
 
@@ -1274,7 +1298,7 @@ void FMGSolve(mg_type *all_grids, int onLevel, int u_id, int F_id, double a, dou
     if(norm_of_residual/norm_of_F < rtol)break;
     if(norm_of_residual           < dtol)break;
   }
-
+  NVTX_POP;
 
   //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
   all_grids->timers.MGSolve += (double)(getTime()-_timeStartMGSolve);

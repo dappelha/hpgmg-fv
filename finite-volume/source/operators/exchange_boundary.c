@@ -27,6 +27,8 @@ void exchange_boundary(level_type * level, int id, int shape){
   if(level->use_cuda && (level->num_ranks > 1))
     cudaDeviceSynchronize();
 
+  NVTX_PUSH("exchange_boundary", 1);
+  
   // loop through packed list of MPI receives and prepost Irecv's...
   if(level->exchange_ghosts[shape].num_recvs>0){
     _timeStart = getTime();
@@ -109,7 +111,9 @@ void exchange_boundary(level_type * level, int id, int shape){
   #ifdef USE_MPI 
   if(nMessages){
     _timeStart = getTime();
+    NVTX_PUSH("MPI_Waitall", 1);
     MPI_Waitall(nMessages,level->exchange_ghosts[shape].requests,level->exchange_ghosts[shape].status);
+    NVTX_POP
   #ifdef SYNC_DEVICE_AFTER_WAITALL
     cudaDeviceSynchronize();
   #endif
@@ -123,6 +127,9 @@ void exchange_boundary(level_type * level, int id, int shape){
     _timeStart = getTime();
     if(level->use_cuda) {
       cuda_copy_block(*level,id,level->exchange_ghosts[shape],2);
+#ifdef USE_NVTX
+      cudaDeviceSynchronize();
+#endif      
     }
     else {
     PRAGMA_THREAD_ACROSS_BLOCKS(level,buffer,level->exchange_ghosts[shape].num_blocks[2])
@@ -137,4 +144,5 @@ void exchange_boundary(level_type * level, int id, int shape){
 
  
   level->timers.ghostZone_total += (double)(getTime()-_timeCommunicationStart);
+  NVTX_POP
 }

@@ -104,11 +104,13 @@ void bench_hpgmg(mg_type *all_grids, int onLevel, double a, double b, double dto
     MGResetTimers(all_grids);
     while( (numSolves<minSolves) ){
       zero_vector(all_grids->levels[onLevel],VECTOR_U);
+      NVTX_PUSH("Solve",1);
       #ifdef USE_FCYCLES
       FMGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
       #else
-       MGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
+      MGSolve(all_grids,onLevel,VECTOR_U,VECTOR_F,a,b,dtol,rtol);
       #endif
+      NVTX_POP;
       numSolves++;
     }
 
