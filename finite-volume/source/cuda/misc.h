@@ -29,7 +29,11 @@
 #define MISC_THREAD_BLOCK_SIZE		256
 
 // CUB library is used for reductions
-#include "cub/cub.cuh"
+#if __CUDACC_VER_MAJOR__ >= 11
+#include <cub/cub.cuh>
+#else
+#include "extern/cub/cub.cuh"
+#endif
 
 #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 600)
 __device__ double atomicAdd(double* address, double val)

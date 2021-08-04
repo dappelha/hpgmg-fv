@@ -54,11 +54,13 @@ OPTS+="-DUSE_TEX "
 OPTS+="-DMPICH_IGNORE_CXX_SEEK "
 OPTS+="-DMPICH_SKIP_MPICXX "
 
+rm -rf build
+
 # GSRB smoother (default)
 ./configure --CC=$CC --NVCC=$NVCC --CFLAGS="-O2 -fopenmp $OPTS" --NVCCFLAGS="-O2 -lineinfo -lnvToolsExt $OPTS" --CUDAARCH="$CUDA_ARCH" --no-fe
 
 # Chebyshev smoother
 #./configure --CC=$CC --NVCC=$NVCC --CFLAGS="-O2 -fopenmp $OPTS" --NVCCFLAGS="-O2 -lineinfo -lnvToolsExt $OPTS" --CUDAARCH="$CUDA_ARCH" --fv-smoother="cheby" --no-fe
 
-make clean -C build
+#make clean -C build
 make -j3 -C build
