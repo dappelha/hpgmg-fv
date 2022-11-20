@@ -1229,7 +1229,7 @@ void create_level(level_type *level, int boxes_in_i, int box_dim, int box_ghosts
   // determine if this level is big enough so that it makes sense to run on GPU
   level->use_cuda = (level->box_dim * level->box_dim * level->box_dim * level->num_my_boxes > HOST_LEVEL_SIZE_THRESHOLD); // this is the local problem size
   if( (parent_level != NULL) && (parent_level->use_cuda==0) ){level->use_cuda=0;} // once we switch to using the CPU, all coarser grids are on the CPU // FIX !!!
-  if(my_rank==0){if(level->use_cuda)fprintf(stdout,"  This level will be run on the GPU\n");else fprintf(stdout,"  This level will be run on the host\n");fflush(stdout);}
+  if(my_rank==0){if(level->use_cuda)fprintf(stdout,"  This level will be run on the GPU (#points = %d) \n",level->box_dim * level->box_dim * level->box_dim * level->num_my_boxes );else fprintf(stdout,"  This level will be run on the host (#points = %d) \n", level->box_dim * level->box_dim * level->box_dim * level->num_my_boxes );fflush(stdout);}
 
 #ifdef CUDA_UM_ALLOC
   // determine CPU/GPU access policy for this level

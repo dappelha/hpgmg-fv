@@ -1,3 +1,4 @@
+#!/bin/bash -e
 
 export MANPATH="$MANPATH":/home/scratch.alotfi_gpu_1/specHPC/hpc_sdk/Linux_x86_64/22.7/compilers/man/
 export PATH=/home/scratch.alotfi_gpu_1/specHPC/hpc_sdk/Linux_x86_64/22.7/compilers/bin:$PATH
@@ -25,8 +26,8 @@ CC=`which mpicc`
 NVCC=`which nvcc`
 
 # set gpu architectures to compile for
-#CUDA_ARCH+="-gencode arch=compute_60,code=sm_60 "
-CUDA_ARCH+="-gencode arch=compute_70,code=sm_70 "
+CUDA_ARCH+="-gencode arch=compute_60,code=sm_60 "
+#CUDA_ARCH+="-gencode arch=compute_70,code=sm_70 "
 #CUDA_ARCH+="-gencode arch=compute_80,code=sm_80 "
 
 # main tile size
@@ -40,8 +41,8 @@ OPTS+="-DBOUNDARY_TILE_J=16 "
 OPTS+="-DBOUNDARY_TILE_K=16 "
 
 # host level threshold: number of grid elements
-OPTS+="-DHOST_LEVEL_SIZE_THRESHOLD=10000 "
-#OPTS+="-DHOST_LEVEL_SIZE_THRESHOLD=40 "
+#OPTS+="-DHOST_LEVEL_SIZE_THRESHOLD=10000 "
+OPTS+="-DHOST_LEVEL_SIZE_THRESHOLD=${THRESHOLD} "
 
 # max number of solves after warmup
 OPTS+="-DMAX_SOLVES=10 "
@@ -84,3 +85,17 @@ rm -rf build
 
 #make clean -C build
 make V=1 -j3 -C build
+
+# alternatively set CUDA_VISIBLE_DEVICES appropriately, see README for details
+export CUDA_MANAGED_FORCE_DEVICE_ALLOC=1
+
+# number of CPU threads executing coarse levels
+export OMP_NUM_THREADS=4
+
+# enable threads for MVAPICH
+export MV2_ENABLE_AFFINITY=0
+
+# Single GPU
+#./build/bin/hpgmg-fv 7 8 
+
+mpirun -np 1 ./build/bin/hpgmg-fv 7 8

@@ -242,6 +242,7 @@ int main(int argc, char **argv){
         }
       }
     }
+    fprintf(stdout,"\n\n >>>> boxes_in_i %d \n\n", boxes_in_i);
     if(boxes_in_i<1){
       if(my_rank==0){fprintf(stderr,"failed to find an acceptable problem size\n");}
       #ifdef USE_MPI
