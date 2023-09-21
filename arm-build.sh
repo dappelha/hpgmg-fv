@@ -1,21 +1,25 @@
 
-export MANPATH="$MANPATH":/home/scratch.alotfi_gpu_1/specHPC/hpc_sdk/Linux_x86_64/22.7/compilers/man/
-export PATH=/home/scratch.alotfi_gpu_1/specHPC/hpc_sdk/Linux_x86_64/22.7/compilers/bin:$PATH
+#export MANPATH="$MANPATH":/home/scratch.alotfi_gpu_1/specHPC/hpc_sdk/Linux_x86_64/22.7/compilers/man/
+#export PATH=/home/scratch.alotfi_gpu_1/specHPC/hpc_sdk/Linux_x86_64/22.7/compilers/bin:$PATH
 
-export PGI_PATH=/home/scratch.alotfi_gpu_1/specHPC/hpc_sdk/Linux_x86_64/22.7
-export MPI_HOME=${PGI_PATH}/comm_libs/openmpi4/openmpi-4.0.5/
-export MPI_ROOT=${MPI_HOME}
-export PATH=${MPI_HOME}/bin:$PATH
-export MANPATH=${MPI_HOME}/share/man:$MANPATH
-export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
+#export PGI_PATH=/home/scratch.alotfi_gpu_1/specHPC/hpc_sdk/Linux_x86_64/22.7
+#export MPI_HOME=${PGI_PATH}/comm_libs/openmpi4/openmpi-4.0.5/
+#export MPI_ROOT=${MPI_HOME}
+#export PATH=${MPI_HOME}/bin:$PATH
+#export MANPATH=${MPI_HOME}/share/man:$MANPATH
+#export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
 
-export PATH=${PGI_PATH}/compilers/bin:$PATH
-export MANPATH=${PGI_PATH}/compilers/man:$MANPATH
-export LD_LIBRARY_PATH=${PGI_PATH}/compilers/lib:$LD_LIBRARY_PATH
+#export PATH=${PGI_PATH}/compilers/bin:$PATH
+#export MANPATH=${PGI_PATH}/compilers/man:$MANPATH
+#export LD_LIBRARY_PATH=${PGI_PATH}/compilers/lib:$LD_LIBRARY_PATH
 
 #set NVHPC_CUDA_HOME=/home/scratch.svc_compute_arch/release/cuda_toolkit/internal/cuda-12.1.15/
+set NVHPC_CUDA_HOME=/opt/nvidia/hpc_sdk/Linux_aarch64/2023/cuda/12.2/
+# hpgmg config uses location of nvcc to assume relative path of ../include (for cuda_runtime.h)
+# So put the better location of nvcc first in path if using nvhpc containers:
+export PATH=/opt/nvidia/hpc_sdk/Linux_aarch64/2023/cuda/12.2/bin/:$PATH
 ####export PATH=/home/scratch.svc_compute_arch/release/cuda_toolkit/internal/cuda-11.5.55-30433912/bin/:$PATH  #was this one
-export PATH=/home/scratch.svc_compute_arch/release/cuda_toolkit/internal/cuda-12.1.15/bin/:$PATH  #was this one
+#export PATH=/home/scratch.svc_compute_arch/release/cuda_toolkit/internal/cuda-12.1.15/bin/:$PATH  #was this one
 #
 
 # find MPI compiler

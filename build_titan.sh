@@ -62,4 +62,4 @@ OPTS+="-DMPICH_SKIP_MPICXX "
 #./configure --CC=$CC --NVCC=$NVCC --CFLAGS="-O2 -fopenmp $OPTS" --NVCCFLAGS="-O2 -lineinfo -lnvToolsExt $OPTS" --CUDAARCH="$CUDA_ARCH" --fv-smoother="cheby" --no-fe
 
 make clean -C build
-make -j3 -C build
+make V=1 -j3 -C build

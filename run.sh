@@ -30,7 +30,7 @@ export MV2_ENABLE_AFFINITY=0
 #./build/bin/hpgmg-fv 7 8
 
 # MPI, one rank per GPU
-mpirun -np 1 ./build/bin/hpgmg-fv 7 8
-#mpirun -np 1 nsys profile -t nvtx,cuda,mpi -f true --kill none --sampling-period=500000 -o cuda-level4 ./build/bin/hpgmg-fv 7 8
+#mpirun -np 1 ./build/bin/hpgmg-fv 7 8
+mpirun -np 1 nsys profile -t nvtx,cuda,mpi -f true --kill none --sampling-period=500000 -o myprof-gpu ./build/bin/hpgmg-fv 4 8
 
 

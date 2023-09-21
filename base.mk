@@ -53,7 +53,7 @@ C99FLAGS := $(if $(findstring c99,$(PCC_FLAGS) $(HPGMG_CFLAGS) $(CFLAGS)),,$(if 
 ifdef CRAY_MPICH2_DIR
   MPI_DIR = $(CRAY_MPICH2_DIR)
 else
-  MPI_DIR = $(dir $(HPGMG_CC))..
+  MPI_DIR = $(dir $(HPGMG_CC))../../mpi
 endif
 CUDA_DIR = $(dir $(HPGMG_NVCC))..
 
